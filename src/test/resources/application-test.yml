@@ -17,3 +17,14 @@ spring:
 
 ledger:
   default-currency: RUB
+  storage:
+    logos-dir: ./target/test-logos
+  market-data:
+    quote-ttl: 10m
+    quote-currency: RUB
+    crypto-quote-currency: USD
+  security:
+    admin-emails: owner@example.com,dup@example.com,admin@example.com
+    jwt:
+      secret: test-secret-key-at-least-32-bytes-long
+      expiration-minutes: 60

@@ -1,0 +1,40 @@
+.chart-wrap {
+  display: grid;
+  gap: 0.65rem;
+  min-height: 220px;
+}
+
+.chart-wrap.compact {
+  min-height: 170px;
+}
+
+.chart-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.empty.compact {
+  padding: 1.4rem 0.5rem;
+  min-height: 170px;
+  display: grid;
+  place-items: center;
+}

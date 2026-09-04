@@ -34,6 +34,23 @@ springdoc:
 
 ledger:
   default-currency: RUB
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  storage:
+    logos-dir: ${LOGOS_DIR:./data/logos}
+  market-data:
+    quote-ttl: 10m
+    quote-currency: RUB
+    crypto-quote-currency: USD
+    moex:
+      base-url: https://iss.moex.com
+    coingecko:
+      base-url: https://api.coingecko.com/api/v3
+  security:
+    admin-emails: ${ADMIN_EMAILS:vowchek@gmail.com}
+    jwt:
+      secret: ${JWT_SECRET:local-dev-only-change-me-32bytes-min!!}
+      expiration-minutes: ${JWT_EXPIRATION_MINUTES:10080}
 ---
 spring:
   config:

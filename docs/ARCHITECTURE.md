@@ -32,11 +32,11 @@ HTTP  →  api (controllers, DTO, errors)
 | --- | --- |
 | `com.ledger.api` | HTTP, валидация входа, RFC 7807 `ProblemDetail` |
 | `com.ledger.api.dto` | Контракт JSON. Не отдаём JPA-сущности наружу |
-| `com.ledger.application` | Сценарии: создать запись, сводка, резолв проекта |
+| `com.ledger.application` | Сценарии: портфели, holdings, траты, auth |
 | `com.ledger.domain` | Модель и инварианты |
-| `com.ledger.infrastructure` | Репозитории, OpenAPI, будущие адаптеры |
+| `com.ledger.infrastructure` | Репозитории, OpenAPI, security |
 
-На этапе 0 доменные классы = JPA `@Entity`. Это осознанный долг: отдельный persistence-модель появится, если домен раздуется (таймер, счета, мультивалютность с курсами).
+На доменные классы сейчас навешан JPA `@Entity`. Отдельная persistence-модель появится, если домен раздуется (котировки, курсы, аудит).
 
 ## Профили Spring
 
@@ -68,6 +68,6 @@ UI **не** кладётся внутрь `src/main/resources/static` как д�
 
 ## Осознанно нет
 
-- микросервисы (время и деньги — один bounded context)
+- микросервисы (портфели и траты — один процесс)
 - Kafka, Redis, отдельный BFF
 - Kubernetes на старте

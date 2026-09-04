@@ -1,0 +1,69 @@
+package com.ledger.api;
+
+import com.ledger.api.dto.ExpenseCategoryResponse;
+import com.ledger.api.dto.ExpenseRequest;
+import com.ledger.api.dto.ExpenseResponse;
+import com.ledger.application.ExpenseService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1")
+@Tag(name = "Expenses")
+public class ExpenseController {
+
+    private final ExpenseService expenses;
+
+    public ExpenseController(ExpenseService expenses) {
+        this.expenses = expenses;
+    }
+
+    @GetMapping("/expense-categories")
+    @Operation(summary = "Справочник категорий трат")
+    public List<ExpenseCategoryResponse> categories() {
+        return expenses.categories();
+    }
+
+    @GetMapping("/expenses")
+    @Operation(summary = "Траты за диапазон месяцев (yyyy-MM)")
+    public List<ExpenseResponse> list(@RequestParam String from, @RequestParam String to) {
+        return expenses.list(from, to);
+    }
+
+    @GetMapping("/expenses/{id}")
+    public ExpenseResponse get(@PathVariable UUID id) {
+        return expenses.get(id);
+    }
+
+    @PostMapping("/expenses")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ExpenseResponse create(@Valid @RequestBody ExpenseRequest request) {
+        return expenses.create(request);
+    }
+
+    @PutMapping("/expenses/{id}")
+    public ExpenseResponse update(@PathVariable UUID id, @Valid @RequestBody ExpenseRequest request) {
+        return expenses.update(id, request);
+    }
+
+    @DeleteMapping("/expenses/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable UUID id) {
+        expenses.delete(id);
+    }
+}

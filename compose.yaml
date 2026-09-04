@@ -27,6 +27,7 @@ services:
       DB_USER: ledger
       DB_PASSWORD: ledger
       SERVER_PORT: 48121
+      JWT_SECRET: docker-dev-only-change-me-use-32bytes+
     depends_on:
       postgres:
         condition: service_healthy

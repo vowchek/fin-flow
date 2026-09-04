@@ -18,6 +18,7 @@
 │   ├── DEPLOYMENT.md
 │   └── adr/
 ├── http/api.http                    запросы для IDEA HTTP Client
+├── web/                             Vite + React UI
 ├── .run/                            run configuration для IDEA
 └── src
     ├── main/java/com/ledger
@@ -36,4 +37,4 @@
 
 Монолитный модуль `ledger-api`. Второй Maven-модуль (`web`, `domain`) заводим только когда появится вторая собираемая штука, а не заранее.
 
-Имена таблиц в единственном числе (`project`, `time_entry`): проще маппить на сущность. Менять не будем без миграции.
+Имена таблиц в единственном числе (`stock_portfolio`, `expense_entry`): проще маппить на сущность.

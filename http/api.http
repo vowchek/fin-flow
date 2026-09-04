@@ -1,61 +1,143 @@
 ### HTTP requests for IntelliJ HTTP Client
 
 @base = http://127.0.0.1:48121
+@token = {{register.response.body.accessToken}}
 
 ### Health
 GET {{base}}/actuator/health
 
-### Create project
-# @name createProject
-POST {{base}}/api/v1/projects
+### Register
+# @name register
+POST {{base}}/api/v1/auth/register
 Content-Type: application/json
 
 {
-  "name": "Клиент А",
-  "description": "Сопровождение продукта"
+  "email": "you@example.com",
+  "password": "password1",
+  "displayName": "You"
 }
 
-### List projects
-GET {{base}}/api/v1/projects
-
-### Create time entry
-POST {{base}}/api/v1/time-entries
+### Login
+POST {{base}}/api/v1/auth/login
 Content-Type: application/json
 
 {
-  "projectId": "{{createProject.response.body.id}}",
-  "startedAt": "2026-09-01T09:00:00Z",
-  "endedAt": "2026-09-01T11:30:00Z",
-  "note": "Созвон и правки"
+  "email": "you@example.com",
+  "password": "password1"
 }
 
-### Create income
-POST {{base}}/api/v1/money-entries
+### Me
+GET {{base}}/api/v1/auth/me
+Authorization: Bearer {{token}}
+
+### Create stock portfolio
+# @name createStock
+POST {{base}}/api/v1/stock-portfolios
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "projectId": "{{createProject.response.body.id}}",
-  "direction": "INCOME",
-  "amount": 15000.00,
-  "currency": "RUB",
-  "occurredOn": "2026-09-01",
-  "category": "invoice",
-  "note": "Аванс"
+  "name": "Брокер",
+  "description": "ИИС"
 }
+
+### List stock portfolios
+GET {{base}}/api/v1/stock-portfolios
+Authorization: Bearer {{token}}
+
+### Add stock holding (first BUY)
+# @name addStockHolding
+POST {{base}}/api/v1/stock-portfolios/{{createStock.response.body.id}}/holdings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "symbol": "SBER",
+  "name": "Сбербанк",
+  "quantity": 10,
+  "occurredOn": "2026-09-01"
+}
+
+### Search MOEX instruments
+GET {{base}}/api/v1/instruments?q=sber&market=MOEX
+Authorization: Bearer {{token}}
+
+### Search crypto instruments
+GET {{base}}/api/v1/instruments?q=bitcoin&market=CRYPTO
+Authorization: Bearer {{token}}
+
+### Buy more stock
+POST {{base}}/api/v1/stock-portfolios/{{createStock.response.body.id}}/holdings/{{addStockHolding.response.body.id}}/buys
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quantity": 2.5,
+  "occurredOn": "2026-09-04"
+}
+
+### Sell stock
+POST {{base}}/api/v1/stock-portfolios/{{createStock.response.body.id}}/holdings/{{addStockHolding.response.body.id}}/sells
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quantity": 1,
+  "occurredOn": "2026-09-04"
+}
+
+### Stock holding transactions
+GET {{base}}/api/v1/stock-portfolios/{{createStock.response.body.id}}/holdings/{{addStockHolding.response.body.id}}/transactions
+Authorization: Bearer {{token}}
+
+### Stock portfolio detail
+GET {{base}}/api/v1/stock-portfolios/{{createStock.response.body.id}}
+Authorization: Bearer {{token}}
+
+### Create crypto portfolio
+# @name createCrypto
+POST {{base}}/api/v1/crypto-portfolios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Cold wallet"
+}
+
+### Add crypto holding (first BUY)
+# @name addCryptoHolding
+POST {{base}}/api/v1/crypto-portfolios/{{createCrypto.response.body.id}}/holdings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "symbol": "BTC",
+  "name": "Bitcoin",
+  "quantity": 0.01,
+  "occurredOn": "2026-09-01"
+}
+
+### Crypto holding transactions
+GET {{base}}/api/v1/crypto-portfolios/{{createCrypto.response.body.id}}/holdings/{{addCryptoHolding.response.body.id}}/transactions
+Authorization: Bearer {{token}}
+
+### Expense categories
+GET {{base}}/api/v1/expense-categories
+Authorization: Bearer {{token}}
 
 ### Create expense
-POST {{base}}/api/v1/money-entries
+POST {{base}}/api/v1/expenses
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "projectId": "{{createProject.response.body.id}}",
-  "direction": "EXPENSE",
-  "amount": 500.00,
+  "category": "GROCERIES",
+  "amount": 15000.00,
   "currency": "RUB",
-  "occurredOn": "2026-09-01",
-  "category": "software",
-  "note": "Подписка"
+  "yearMonth": "2026-08",
+  "note": "Август"
 }
 
-### Summary
-GET {{base}}/api/v1/summary?from=2026-09-01&to=2026-09-30
+### List expenses
+GET {{base}}/api/v1/expenses?from=2026-08&to=2026-09
+Authorization: Bearer {{token}}
