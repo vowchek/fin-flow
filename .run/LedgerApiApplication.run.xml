@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="LedgerApiApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="ledger-api" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.ledger.LedgerApiApplication" />
+    <option name="ACTIVE_PROFILES" value="local" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
