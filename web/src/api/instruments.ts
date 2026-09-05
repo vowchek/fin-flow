@@ -16,9 +16,28 @@ export type InstrumentPayload = {
   currency?: string
   enabled?: boolean
   assetKind?: string | null
-  annualCashflowPerUnit?: number | null
-  cashflowGrowthPct?: number | null
-  cashflowUntilYear?: number | null
+  paysDividends?: boolean | null
+}
+
+export type RemoteInstrument = {
+  symbol: string
+  externalId: string
+  name: string
+  currency: string
+  logoUrl: string | null
+}
+
+export type InstrumentPayment = {
+  id: string
+  occurredOn: string
+  amountPerUnit: number
+  currency: string
+  kind: 'DIVIDEND' | 'COUPON'
+}
+
+export type InstrumentImportResult = {
+  instrument: Instrument
+  payments: InstrumentPayment[]
 }
 
 function body(kind: PortfolioKind, payload: InstrumentPayload) {
@@ -33,9 +52,7 @@ function body(kind: PortfolioKind, payload: InstrumentPayload) {
   return {
     ...base,
     assetKind: payload.assetKind || 'EQUITY',
-    annualCashflowPerUnit: payload.annualCashflowPerUnit ?? null,
-    cashflowGrowthPct: payload.cashflowGrowthPct ?? null,
-    cashflowUntilYear: payload.cashflowUntilYear ?? null,
+    paysDividends: payload.paysDividends ?? true,
   }
 }
 
@@ -64,6 +81,52 @@ export function updateInstrument(kind: PortfolioKind, id: string, payload: Instr
 
 export function deleteInstrument(kind: PortfolioKind, id: string) {
   return api<void>(`${adminPath(kind)}/${id}`, { method: 'DELETE' })
+}
+
+export function searchMoex(q: string) {
+  return api<RemoteInstrument[]>(`/api/v1/admin/market/stock/search?q=${encodeURIComponent(q.trim())}`)
+}
+
+export function importFromMoex(payload: {
+  externalId?: string
+  symbol?: string
+  enabled?: boolean
+  overwriteCashflow?: boolean
+}) {
+  return api<InstrumentImportResult>('/api/v1/admin/stock-instruments/import', {
+    method: 'POST',
+    body: JSON.stringify({
+      externalId: payload.externalId ?? null,
+      symbol: payload.symbol ?? null,
+      enabled: payload.enabled ?? true,
+      overwriteCashflow: payload.overwriteCashflow ?? true,
+    }),
+  })
+}
+
+export function refreshFromMoex(id: string, overwriteCashflow = true) {
+  const q = overwriteCashflow ? '?overwriteCashflow=true' : '?overwriteCashflow=false'
+  return api<InstrumentImportResult>(`${adminPath('stock')}/${id}/refresh${q}`, { method: 'POST' })
+}
+
+export type PaymentsRefreshResult = {
+  refreshed: number
+  failed: number
+  results: Array<{
+    id: string
+    symbol: string
+    ok: boolean
+    error: string | null
+    paymentCount: number
+  }>
+}
+
+export function refreshAllPayments() {
+  return api<PaymentsRefreshResult>(`${adminPath('stock')}/refresh-payments`, { method: 'POST' })
+}
+
+export function listInstrumentPayments(id: string) {
+  return api<InstrumentPayment[]>(`${adminPath('stock')}/${id}/payments`)
 }
 
 export async function uploadLogo(kind: PortfolioKind, id: string, file: File) {

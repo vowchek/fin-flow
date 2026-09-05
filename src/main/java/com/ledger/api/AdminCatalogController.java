@@ -1,8 +1,14 @@
 package com.ledger.api;
 
+import com.ledger.api.dto.InstrumentImportRequest;
+import com.ledger.api.dto.InstrumentImportResponse;
+import com.ledger.api.dto.InstrumentPaymentResponse;
+import com.ledger.api.dto.InstrumentPaymentsRefreshResponse;
 import com.ledger.api.dto.InstrumentResponse;
 import com.ledger.api.dto.InstrumentUpsertRequest;
+import com.ledger.api.dto.RemoteInstrumentResponse;
 import com.ledger.application.CatalogService;
+import com.ledger.application.InstrumentImportService;
 import com.ledger.domain.AssetMarket;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -14,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,9 +34,39 @@ import java.util.UUID;
 public class AdminCatalogController {
 
     private final CatalogService catalog;
+    private final InstrumentImportService imports;
 
-    public AdminCatalogController(CatalogService catalog) {
+    public AdminCatalogController(CatalogService catalog, InstrumentImportService imports) {
         this.catalog = catalog;
+        this.imports = imports;
+    }
+
+    @GetMapping("/market/stock/search")
+    public List<RemoteInstrumentResponse> searchStock(@RequestParam("q") String q) {
+        return imports.searchMarket(q);
+    }
+
+    @PostMapping("/stock-instruments/import")
+    public InstrumentImportResponse importStock(@Valid @RequestBody InstrumentImportRequest request) {
+        return imports.importFromMarket(request);
+    }
+
+    @PostMapping("/stock-instruments/refresh-payments")
+    public InstrumentPaymentsRefreshResponse refreshAllStockPayments() {
+        return imports.refreshAllPayments();
+    }
+
+    @PostMapping("/stock-instruments/{id}/refresh")
+    public InstrumentImportResponse refreshStock(
+            @PathVariable UUID id,
+            @RequestParam(value = "overwriteCashflow", required = false) Boolean overwriteCashflow
+    ) {
+        return imports.refreshFromMarket(id, overwriteCashflow);
+    }
+
+    @GetMapping("/stock-instruments/{id}/payments")
+    public List<InstrumentPaymentResponse> listStockPayments(@PathVariable UUID id) {
+        return imports.listPayments(id);
     }
 
     @GetMapping("/stock-instruments")

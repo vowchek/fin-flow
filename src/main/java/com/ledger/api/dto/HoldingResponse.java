@@ -21,9 +21,15 @@ public record HoldingResponse(
         BigDecimal totalChangeAbs,
         BigDecimal totalChangePct,
         BigDecimal incomeAbs,
+        /** Part of incomeAbs that did not credit cash (settleToCash=false). Informational only. */
+        BigDecimal reinvestedIncomeAbs,
         String currency,
         Instant priceAsOf,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        /** Expected dividend/coupon for the current dividend-year (portfolio qty × per unit). */
+        BigDecimal expectedIncomeAbs,
+        /** ACTUAL | FORECAST | NONE */
+        String expectedIncomeBasis
 ) {
 }

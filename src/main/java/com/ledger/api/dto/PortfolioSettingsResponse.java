@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 
 public record PortfolioSettingsResponse(
         String name,
-        BigDecimal taxRatePercent
+        BigDecimal taxRatePercent,
+        BigDecimal investedAmount
 ) {
 }

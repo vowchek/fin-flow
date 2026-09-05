@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ApiError } from '../../api/client'
 import * as instrumentsApi from '../../api/instruments'
+import type { InstrumentPayment, RemoteInstrument } from '../../api/instruments'
 import type { Instrument, PortfolioKind } from '../../api/types'
 import { AssetLogo } from '../../components/AssetLogo'
 import { Modal } from '../../components/Modal'
@@ -13,12 +14,10 @@ type Draft = {
   currency: string
   enabled: boolean
   assetKind: 'EQUITY' | 'BOND'
-  annualCashflowPerUnit: string
-  cashflowGrowthPct: string
-  cashflowUntilYear: string
+  paysDividends: boolean
 }
 
-type FormTab = 'main' | 'cashflow'
+type FormTab = 'import' | 'main' | 'payments'
 
 const emptyDraft = (kind: PortfolioKind): Draft => ({
   symbol: '',
@@ -27,10 +26,24 @@ const emptyDraft = (kind: PortfolioKind): Draft => ({
   currency: kind === 'crypto' ? 'USD' : 'RUB',
   enabled: true,
   assetKind: 'EQUITY',
-  annualCashflowPerUnit: '',
-  cashflowGrowthPct: '',
-  cashflowUntilYear: '',
+  paysDividends: true,
 })
+
+function draftFromInstrument(item: Instrument): Draft {
+  return {
+    symbol: item.symbol,
+    externalId: item.externalId,
+    name: item.name,
+    currency: item.currency,
+    enabled: item.enabled,
+    assetKind: item.assetKind === 'BOND' ? 'BOND' : 'EQUITY',
+    paysDividends: item.paysDividends !== false,
+  }
+}
+
+function paymentKindLabel(kind: InstrumentPayment['kind']) {
+  return kind === 'COUPON' ? 'Купон' : 'Дивиденд'
+}
 
 export function AdminCatalogPage() {
   const [kind, setKind] = useState<PortfolioKind>('stock')
@@ -43,6 +56,12 @@ export function AdminCatalogPage() {
   const [pending, setPending] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [tab, setTab] = useState<FormTab>('main')
+  const [searchQ, setSearchQ] = useState('')
+  const [searchResults, setSearchResults] = useState<RemoteInstrument[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [payments, setPayments] = useState<InstrumentPayment[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null)
 
   const title = kind === 'stock' ? 'Фонд (MOEX)' : 'Крипта (CoinGecko)'
 
@@ -62,11 +81,40 @@ export function AdminCatalogPage() {
     void reload()
   }, [kind])
 
+  useEffect(() => {
+    if (kind !== 'stock' || !searchQ.trim() || searchQ.trim().length < 1) {
+      setSearchResults([])
+      return
+    }
+    const handle = window.setTimeout(() => {
+      setSearchLoading(true)
+      instrumentsApi
+        .searchMoex(searchQ)
+        .then(setSearchResults)
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false))
+    }, 280)
+    return () => window.clearTimeout(handle)
+  }, [searchQ, kind])
+
+  useEffect(() => {
+    if (!editing || kind !== 'stock' || tab !== 'payments') return
+    setPaymentsLoading(true)
+    instrumentsApi
+      .listInstrumentPayments(editing.id)
+      .then(setPayments)
+      .catch(() => setPayments([]))
+      .finally(() => setPaymentsLoading(false))
+  }, [editing, kind, tab])
+
   function openCreate() {
     setEditing(null)
     setDraft(emptyDraft(kind))
     setLogoFile(null)
-    setTab('main')
+    setTab(kind === 'stock' ? 'import' : 'main')
+    setSearchQ('')
+    setSearchResults([])
+    setPayments([])
     setCreating(true)
     setError(null)
   }
@@ -74,19 +122,12 @@ export function AdminCatalogPage() {
   function openEdit(item: Instrument) {
     setCreating(false)
     setEditing(item)
-    setDraft({
-      symbol: item.symbol,
-      externalId: item.externalId,
-      name: item.name,
-      currency: item.currency,
-      enabled: item.enabled,
-      assetKind: item.assetKind === 'BOND' ? 'BOND' : 'EQUITY',
-      annualCashflowPerUnit: item.annualCashflowPerUnit != null ? String(item.annualCashflowPerUnit) : '',
-      cashflowGrowthPct: item.cashflowGrowthPct != null ? String(item.cashflowGrowthPct) : '',
-      cashflowUntilYear: item.cashflowUntilYear != null ? String(item.cashflowUntilYear) : '',
-    })
+    setDraft(draftFromInstrument(item))
     setLogoFile(null)
     setTab('main')
+    setSearchQ('')
+    setSearchResults([])
+    setPayments([])
     setError(null)
   }
 
@@ -95,6 +136,75 @@ export function AdminCatalogPage() {
     setCreating(false)
     setEditing(null)
     setTab('main')
+    setSearchQ('')
+    setSearchResults([])
+    setPayments([])
+  }
+
+  function applyImported(result: instrumentsApi.InstrumentImportResult) {
+    setEditing(result.instrument)
+    setCreating(false)
+    setDraft(draftFromInstrument(result.instrument))
+    setPayments(result.payments)
+    setTab('main')
+    setSearchQ('')
+    setSearchResults([])
+  }
+
+  async function onImportRemote(remote: RemoteInstrument) {
+    setPending(true)
+    setError(null)
+    try {
+      const result = await instrumentsApi.importFromMoex({
+        externalId: remote.externalId,
+        symbol: remote.symbol,
+        enabled: draft.enabled,
+        overwriteCashflow: true,
+      })
+      applyImported(result)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось импортировать')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function onRefreshMoex() {
+    if (!editing) return
+    setPending(true)
+    setError(null)
+    try {
+      const result = await instrumentsApi.refreshFromMoex(editing.id, true)
+      applyImported(result)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось обновить с T‑Invest')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function onRefreshAllPayments() {
+    if (kind !== 'stock') return
+    if (!window.confirm(`Обновить дивиденды/купоны для всех ${items.length} активов? Это может занять минуту.`)) {
+      return
+    }
+    setPending(true)
+    setError(null)
+    setBulkMsg(null)
+    try {
+      const result = await instrumentsApi.refreshAllPayments()
+      setBulkMsg(
+        `Выплаты обновлены: ${result.refreshed} ок` +
+          (result.failed > 0 ? `, ${result.failed} ошибок` : ''),
+      )
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось массово обновить выплаты')
+    } finally {
+      setPending(false)
+    }
   }
 
   async function onSave(e: FormEvent) {
@@ -109,10 +219,7 @@ export function AdminCatalogPage() {
         currency: draft.currency,
         enabled: draft.enabled,
         assetKind: kind === 'stock' ? draft.assetKind : null,
-        annualCashflowPerUnit:
-          kind === 'stock' && draft.annualCashflowPerUnit.trim() ? Number(draft.annualCashflowPerUnit) : null,
-        cashflowGrowthPct: kind === 'stock' && draft.cashflowGrowthPct.trim() ? Number(draft.cashflowGrowthPct) : null,
-        cashflowUntilYear: kind === 'stock' && draft.cashflowUntilYear.trim() ? Number(draft.cashflowUntilYear) : null,
+        paysDividends: kind === 'stock' ? draft.paysDividends : null,
       }
       let saved: Instrument
       if (editing) {
@@ -127,6 +234,7 @@ export function AdminCatalogPage() {
       setEditing(null)
       setLogoFile(null)
       setTab('main')
+      setPayments([])
       await reload()
       void saved
     } catch (err) {
@@ -165,9 +273,16 @@ export function AdminCatalogPage() {
           <h1 className="page-title">Админка каталога</h1>
           <p className="page-lead">Тикеры, которые увидят пользователи при добавлении актива.</p>
         </div>
-        <button type="button" className="btn" onClick={openCreate}>
-          Добавить
-        </button>
+        <div className="row" style={{ gap: '0.5rem' }}>
+          {kind === 'stock' ? (
+            <button type="button" className="btn btn-ghost" disabled={pending || items.length === 0} onClick={() => void onRefreshAllPayments()}>
+              {pending ? 'Обновляем…' : 'Обновить дивиденды'}
+            </button>
+          ) : null}
+          <button type="button" className="btn" onClick={openCreate}>
+            Добавить
+          </button>
+        </div>
       </div>
 
       <div className="row" style={{ gap: '0.5rem', marginBottom: '1rem' }}>
@@ -179,6 +294,7 @@ export function AdminCatalogPage() {
         </button>
       </div>
 
+      {bulkMsg && !modalOpen ? <p className="muted">{bulkMsg}</p> : null}
       {error && !modalOpen && <p className="error">{error}</p>}
 
       {loading ? (
@@ -195,12 +311,13 @@ export function AdminCatalogPage() {
                   <strong>
                     {item.symbol}
                     {!item.enabled ? <span className="holding-badge">выкл</span> : null}
+                    {kind === 'stock' && item.paysDividends === false ? (
+                      <span className="holding-badge">без дивов</span>
+                    ) : null}
                   </strong>
                   <span className="holding-meta">
                     {item.name} · {item.externalId}
-                    {kind === 'stock' && item.annualCashflowPerUnit != null
-                      ? ` · ${formatMoney(item.annualCashflowPerUnit, item.currency)}/год`
-                      : ''}
+                    {kind === 'stock' && item.assetKind === 'BOND' ? ' · облигация' : ''}
                   </span>
                 </span>
               </span>
@@ -228,6 +345,17 @@ export function AdminCatalogPage() {
         <form className="stack adm-form" onSubmit={onSave}>
           {kind === 'stock' ? (
             <div className="adm-tabs" role="tablist" aria-label="Разделы карточки актива">
+              {creating ? (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'import'}
+                  className={`adm-tab${tab === 'import' ? ' active' : ''}`}
+                  onClick={() => setTab('import')}
+                >
+                  Импорт
+                </button>
+              ) : null}
               <button
                 type="button"
                 role="tab"
@@ -237,22 +365,75 @@ export function AdminCatalogPage() {
               >
                 Основное
               </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'cashflow'}
-                className={`adm-tab${tab === 'cashflow' ? ' active' : ''}`}
-                onClick={() => setTab('cashflow')}
-              >
-                Ден. поток
-              </button>
+              {editing ? (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'payments'}
+                  className={`adm-tab${tab === 'payments' ? ' active' : ''}`}
+                  onClick={() => setTab('payments')}
+                >
+                  Выплаты
+                </button>
+              ) : null}
             </div>
           ) : null}
 
-          <div className={`adm-panel stack${tab === 'main' || kind !== 'stock' ? '' : ' adm-panel--hidden'}`} role="tabpanel">
+          {kind === 'stock' && creating ? (
+            <div className={`adm-panel stack${tab === 'import' ? '' : ' adm-panel--hidden'}`} role="tabpanel">
+              <p className="muted" style={{ marginTop: 0 }}>
+                Найдите бумагу в T‑Invest — карточка и история дивидендов/купонов заполнятся сами.
+              </p>
+              <div className="field">
+                <label htmlFor="adm-moex-q">Поиск T‑Invest</label>
+                <input
+                  id="adm-moex-q"
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  placeholder="SBER, Газпром…"
+                  autoComplete="off"
+                />
+              </div>
+              {searchLoading ? <p className="muted">Ищем…</p> : null}
+              {!searchLoading && searchQ.trim() && searchResults.length === 0 ? (
+                <p className="muted">Ничего не найдено</p>
+              ) : null}
+              {searchResults.length > 0 ? (
+                <ul className="adm-search-list">
+                  {searchResults.map((r) => (
+                    <li key={`${r.externalId}-${r.symbol}`}>
+                      <button
+                        type="button"
+                        className="adm-search-item"
+                        disabled={pending}
+                        onClick={() => void onImportRemote(r)}
+                      >
+                        <strong>{r.symbol}</strong>
+                        <span>{r.name}</span>
+                        <span className="muted">{r.externalId}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="muted">Или заполните поля вручную на вкладке «Основное».</p>
+            </div>
+          ) : null}
+
+          <div
+            className={`adm-panel stack${tab === 'main' || kind !== 'stock' ? '' : ' adm-panel--hidden'}`}
+            role="tabpanel"
+          >
             <p className="muted" style={{ marginTop: 0 }}>
               {hint}
             </p>
+            {kind === 'stock' && editing ? (
+              <div className="row" style={{ gap: '0.5rem', marginBottom: '0.35rem' }}>
+                <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => void onRefreshMoex()}>
+                  {pending ? 'Обновляем…' : 'Обновить с T‑Invest'}
+                </button>
+              </div>
+            ) : null}
             <div className="field">
               <label htmlFor="adm-symbol">Тикер</label>
               <input
@@ -292,6 +473,19 @@ export function AdminCatalogPage() {
                 <option value="USD">USD</option>
               </select>
             </div>
+            {kind === 'stock' ? (
+              <div className="field">
+                <label htmlFor="adm-kind">Тип</label>
+                <select
+                  id="adm-kind"
+                  value={draft.assetKind}
+                  onChange={(e) => setDraft({ ...draft, assetKind: e.target.value as 'EQUITY' | 'BOND' })}
+                >
+                  <option value="EQUITY">Акция</option>
+                  <option value="BOND">Облигация</option>
+                </select>
+              </div>
+            ) : null}
             <label className="row" style={{ gap: '0.5rem' }}>
               <input
                 type="checkbox"
@@ -311,59 +505,46 @@ export function AdminCatalogPage() {
             </div>
           </div>
 
-          {kind === 'stock' ? (
-            <div className={`adm-panel stack${tab === 'cashflow' ? '' : ' adm-panel--hidden'}`} role="tabpanel">
+          {kind === 'stock' && editing ? (
+            <div className={`adm-panel stack${tab === 'payments' ? '' : ' adm-panel--hidden'}`} role="tabpanel">
               <p className="muted" style={{ marginTop: 0 }}>
-                Ожидаемый доход на 1 бумагу за текущий год и рост прогноза на следующие годы.
+                История выплат с T‑Invest. По ней считается пассивный доход: прошлые годы — факт, текущий и будущие —
+                прогноз (медианный рост). При обновлении таблица перезаписывается.
               </p>
-              <div className="field">
-                <label htmlFor="adm-kind">Тип</label>
-                <select
-                  id="adm-kind"
-                  value={draft.assetKind}
-                  onChange={(e) => setDraft({ ...draft, assetKind: e.target.value as 'EQUITY' | 'BOND' })}
-                >
-                  <option value="EQUITY">Акция</option>
-                  <option value="BOND">Облигация</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="adm-cf">
-                  {draft.assetKind === 'BOND' ? 'Купон на 1 бумагу в год, ₽' : 'Дивиденд на 1 акцию в год, ₽'}
-                </label>
+              <label className="row" style={{ gap: '0.5rem' }}>
                 <input
-                  id="adm-cf"
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={draft.annualCashflowPerUnit}
-                  onChange={(e) => setDraft({ ...draft, annualCashflowPerUnit: e.target.value })}
-                  placeholder="ожидание за текущий год, до налога"
+                  type="checkbox"
+                  checked={draft.paysDividends}
+                  onChange={(e) => setDraft({ ...draft, paysDividends: e.target.checked })}
                 />
-              </div>
-              <div className="field">
-                <label htmlFor="adm-growth">Прогноз роста на следующий год, %</label>
-                <input
-                  id="adm-growth"
-                  type="number"
-                  step="any"
-                  value={draft.cashflowGrowthPct}
-                  onChange={(e) => setDraft({ ...draft, cashflowGrowthPct: e.target.value })}
-                  placeholder="например 5"
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="adm-until">До года включительно (необязательно)</label>
-                <input
-                  id="adm-until"
-                  type="number"
-                  step="1"
-                  min="1990"
-                  max="2200"
-                  value={draft.cashflowUntilYear}
-                  onChange={(e) => setDraft({ ...draft, cashflowUntilYear: e.target.value })}
-                />
-              </div>
+                Платит дивиденды (если снято — в прогноз текущего и будущих лет не входит)
+              </label>
+              {paymentsLoading ? (
+                <p className="muted">Загрузка…</p>
+              ) : payments.length === 0 ? (
+                <p className="muted">Выплат пока нет — нажмите «Обновить с T‑Invest».</p>
+              ) : (
+                <div className="adm-pay-wrap">
+                  <table className="adm-pay-table">
+                    <thead>
+                      <tr>
+                        <th>Дата</th>
+                        <th>Тип</th>
+                        <th>На 1 шт</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((p) => (
+                        <tr key={p.id}>
+                          <td>{p.occurredOn}</td>
+                          <td>{paymentKindLabel(p.kind)}</td>
+                          <td>{formatMoney(p.amountPerUnit, p.currency)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -372,9 +553,11 @@ export function AdminCatalogPage() {
             <button type="button" className="btn btn-ghost" disabled={pending} onClick={closeModal}>
               Отмена
             </button>
-            <button type="submit" className="btn" disabled={pending}>
-              {pending ? 'Сохраняем…' : 'Сохранить'}
-            </button>
+            {tab !== 'import' ? (
+              <button type="submit" className="btn" disabled={pending}>
+                {pending ? 'Сохраняем…' : 'Сохранить'}
+              </button>
+            ) : null}
           </div>
         </form>
       </Modal>

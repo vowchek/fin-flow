@@ -46,6 +46,9 @@ ledger:
       base-url: https://iss.moex.com
     coingecko:
       base-url: https://api.coingecko.com/api/v3
+    tinvest:
+      token: ${TINVEST_TOKEN:}
+      base-url: https://invest-public-api.tinkoff.ru/rest
   security:
     admin-emails: ${ADMIN_EMAILS:vowchek@gmail.com}
     jwt:

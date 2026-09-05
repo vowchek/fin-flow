@@ -1139,6 +1139,19 @@ h3 {
   background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
+.asset-table tr.asset-row-clickable {
+  cursor: pointer;
+}
+
+.asset-table tr.asset-row-clickable:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.asset-table tr.asset-row-clickable:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
 .cash-in-choices {
   gap: 0.55rem;
 }
@@ -1175,28 +1188,18 @@ h3 {
 
 .pnl-tip {
   position: relative;
-  display: inline-block;
-  cursor: default;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  cursor: help;
   z-index: 1;
 }
 
-.pnl-tip:hover,
-.pnl-tip:focus-within {
-  z-index: 20;
-}
-
-.pnl-tip:hover .pnl-tip-box,
-.pnl-tip:focus-within .pnl-tip-box {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
+.pnl-tip-value {
+  border-bottom: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
 }
 
 .pnl-tip-box {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 0.35rem);
-  z-index: 30;
   min-width: 12rem;
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
@@ -1208,11 +1211,13 @@ h3 {
   font-weight: 500;
   line-height: 1.45;
   white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px);
-  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
   pointer-events: none;
+}
+
+.pnl-tip-box--portal {
+  position: fixed;
+  z-index: 1200;
+  transform: translateY(-100%);
 }
 
 .pnl-tip-box > div {

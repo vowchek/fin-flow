@@ -8,6 +8,10 @@ public record PassiveIncomeResponse(
         BigDecimal annualGross,
         BigDecimal annualNet,
         BigDecimal monthlyNet,
-        String currency
+        String currency,
+        /** ACTUAL — из таблицы выплат; FORECAST — прогноз; NONE — нет данных. */
+        String basis,
+        /** Медианный YoY рост, % (для прогноза); иначе null. */
+        BigDecimal growthPct
 ) {
 }

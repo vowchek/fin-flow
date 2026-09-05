@@ -2,6 +2,7 @@ import { api } from './client'
 import type {
   Holding,
   HoldingCashflow,
+  HoldingDetail,
   PassiveIncome,
   PaymentCalendar,
   PortfolioDetail,
@@ -28,6 +29,10 @@ export function getValueHistory(kind: PortfolioKind, id: string) {
   return api<ValuePoint[]>(`${base(kind)}/${id}/value-history`)
 }
 
+export function getHoldingDetail(kind: PortfolioKind, portfolioId: string, holdingId: string) {
+  return api<HoldingDetail>(`${base(kind)}/${portfolioId}/holdings/${holdingId}/detail`)
+}
+
 export function createPortfolio(
   kind: PortfolioKind,
   name: string,
@@ -48,10 +53,14 @@ export function deletePortfolio(kind: PortfolioKind, id: string) {
   return api<void>(`${base(kind)}/${id}`, { method: 'DELETE' })
 }
 
+export function deleteHolding(kind: PortfolioKind, portfolioId: string, holdingId: string) {
+  return api<void>(`${base(kind)}/${portfolioId}/holdings/${holdingId}`, { method: 'DELETE' })
+}
+
 export function updatePortfolio(
   kind: PortfolioKind,
   id: string,
-  payload: { name: string; description?: string | null },
+  payload: { name: string; description?: string | null; investedAmount?: number | null },
 ) {
   return api<PortfolioDetail>(`${base(kind)}/${id}`, {
     method: 'PUT',
@@ -59,6 +68,7 @@ export function updatePortfolio(
       name: payload.name,
       description: payload.description ?? null,
       entryMode: null,
+      investedAmount: payload.investedAmount ?? null,
     }),
   })
 }
@@ -71,6 +81,7 @@ export type HoldingCreatePayload = {
   occurredOn?: string
   unitPrice?: number
   note?: string
+  addToInvested?: boolean
 }
 
 export function addHolding(kind: PortfolioKind, portfolioId: string, payload: HoldingCreatePayload) {
@@ -84,25 +95,30 @@ export function addHolding(kind: PortfolioKind, portfolioId: string, payload: Ho
       occurredOn: payload.occurredOn || null,
       unitPrice: payload.unitPrice ?? null,
       note: payload.note || null,
+      addToInvested: payload.addToInvested ?? true,
     }),
   })
 }
 
 export function seedLazyStock(
   portfolioId: string,
-  holdings: Array<{
-    instrumentId: string
-    symbol: string
-    name?: string
-    quantity: number
-    occurredOn: string
-    unitPrice: number
-  }>,
+  payload: {
+    investedAmount: number
+    holdings: Array<{
+      instrumentId: string
+      symbol: string
+      name?: string
+      quantity: number
+      occurredOn: string
+      unitPrice: number
+    }>
+  },
 ) {
   return api<PortfolioDetail>(`${base('stock')}/${portfolioId}/lazy-seed`, {
     method: 'POST',
     body: JSON.stringify({
-      holdings: holdings.map((h) => ({
+      investedAmount: payload.investedAmount,
+      holdings: payload.holdings.map((h) => ({
         instrumentId: h.instrumentId,
         symbol: h.symbol,
         name: h.name || null,
@@ -145,6 +161,7 @@ export function buyHolding(kind: PortfolioKind, portfolioId: string, holdingId: 
       occurredOn: payload.occurredOn || null,
       unitPrice: payload.unitPrice ?? null,
       note: payload.note || null,
+      addToInvested: payload.addToInvested ?? true,
     }),
   })
 }
@@ -222,12 +239,15 @@ export function getPassiveIncome(portfolioId: string, year?: number) {
 
 export function updatePortfolioSettings(
   portfolioId: string,
-  payload: { name: string; taxRatePercent: number },
+  payload: { name: string; taxRatePercent: number; investedAmount: number },
 ) {
-  return api<{ name: string; taxRatePercent: number }>(`${base('stock')}/${portfolioId}/settings`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  })
+  return api<{ name: string; taxRatePercent: number; investedAmount: number | null }>(
+    `${base('stock')}/${portfolioId}/settings`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  )
 }
 
 export function getPaymentCalendar(portfolioId: string, year?: number) {

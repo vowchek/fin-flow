@@ -17,6 +17,13 @@ public interface MarketDataProvider {
 
     List<RemoteInstrument> search(String query);
 
+    /**
+     * Richer metadata for a known external id (SECID / coin id). Default: empty.
+     */
+    default Optional<InstrumentProfile> fetchInstrumentProfile(String externalId) {
+        return Optional.empty();
+    }
+
     Optional<RemoteQuote> fetchLive(String externalId);
 
     /**
@@ -87,6 +94,16 @@ public interface MarketDataProvider {
             BigDecimal valuePerUnit,
             String currency,
             String kind
+    ) {
+    }
+
+    record InstrumentProfile(
+            String symbol,
+            String externalId,
+            String name,
+            String currency,
+            /** {@code EQUITY} or {@code BOND}; null if unknown. */
+            String assetKind
     ) {
     }
 }

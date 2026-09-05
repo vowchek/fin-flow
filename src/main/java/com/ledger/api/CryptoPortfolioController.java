@@ -2,6 +2,7 @@ package com.ledger.api;
 
 import com.ledger.api.dto.CashMovementRequest;
 import com.ledger.api.dto.HoldingCreateRequest;
+import com.ledger.api.dto.HoldingDetailResponse;
 import com.ledger.api.dto.HoldingResponse;
 import com.ledger.api.dto.LazyCryptoSeedRequest;
 import com.ledger.api.dto.PortfolioDetailResponse;
@@ -109,6 +110,13 @@ public class CryptoPortfolioController {
         return portfolios.sell(id, holdingId, request);
     }
 
+    @DeleteMapping("/{id}/holdings/{holdingId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Удалить позицию из портфеля (без продажи)")
+    public void deleteHolding(@PathVariable UUID id, @PathVariable UUID holdingId) {
+        portfolios.deleteHolding(id, holdingId);
+    }
+
     @PostMapping("/{id}/cash/deposits")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Внести наличные")
@@ -127,5 +135,11 @@ public class CryptoPortfolioController {
     @Operation(summary = "История сделок по позиции")
     public List<TradeResponse> transactions(@PathVariable UUID id, @PathVariable UUID holdingId) {
         return portfolios.listTransactions(id, holdingId);
+    }
+
+    @GetMapping("/{id}/holdings/{holdingId}/detail")
+    @Operation(summary = "Карточка актива: цена, день, график")
+    public HoldingDetailResponse holdingDetail(@PathVariable UUID id, @PathVariable UUID holdingId) {
+        return portfolios.holdingDetail(id, holdingId);
     }
 }

@@ -102,6 +102,7 @@ public final class HoldingValuation {
         }
 
         BigDecimal income = incomeAbs == null ? BigDecimal.ZERO : incomeAbs;
+        BigDecimal reinvested = positiveOrNull(base.reinvestedIncomeAbs());
 
         return new HoldingResponse(
                 base.id(),
@@ -119,10 +120,13 @@ public final class HoldingValuation {
                 totalAbs,
                 totalPct,
                 income.compareTo(BigDecimal.ZERO) > 0 ? income : null,
+                reinvested,
                 currency,
                 asOf,
                 base.createdAt(),
-                base.updatedAt()
+                base.updatedAt(),
+                base.expectedIncomeAbs(),
+                base.expectedIncomeBasis()
         );
     }
 
@@ -136,7 +140,6 @@ public final class HoldingValuation {
         List<CostBasis.TradeLine> lines = tradesChronological.stream()
                 .map(t -> {
                     if (t.kind() == TxKind.DIVIDEND || t.kind() == TxKind.COUPON) {
-                        // Income increases cash qty without adding to invested cost.
                         return new CostBasis.TradeLine(t.side(), t.quantity(), null);
                     }
                     BigDecimal price = t.unitPrice() != null ? t.unitPrice() : BigDecimal.ONE;
@@ -171,10 +174,13 @@ public final class HoldingValuation {
                 totalAbs,
                 totalPct,
                 income.compareTo(BigDecimal.ZERO) > 0 ? income : null,
+                null,
                 currency,
                 Instant.now(),
                 base.createdAt(),
-                base.updatedAt()
+                base.updatedAt(),
+                null,
+                null
         );
     }
 
@@ -196,10 +202,48 @@ public final class HoldingValuation {
                 base.totalChangeAbs(),
                 base.totalChangePct(),
                 income.compareTo(BigDecimal.ZERO) > 0 ? income : null,
+                positiveOrNull(base.reinvestedIncomeAbs()),
                 base.currency(),
                 base.priceAsOf(),
                 base.createdAt(),
-                base.updatedAt()
+                base.updatedAt(),
+                base.expectedIncomeAbs(),
+                base.expectedIncomeBasis()
         );
+    }
+
+    static HoldingResponse withExpectedIncome(HoldingResponse base, BigDecimal expectedAbs, String basis) {
+        BigDecimal abs = expectedAbs == null ? BigDecimal.ZERO : expectedAbs;
+        return new HoldingResponse(
+                base.id(),
+                base.symbol(),
+                base.name(),
+                base.quantity(),
+                base.openedOn(),
+                base.cash(),
+                base.logoUrl(),
+                base.unitPrice(),
+                base.marketValue(),
+                base.costBasis(),
+                base.dayChangeAbs(),
+                base.dayChangePct(),
+                base.totalChangeAbs(),
+                base.totalChangePct(),
+                base.incomeAbs(),
+                base.reinvestedIncomeAbs(),
+                base.currency(),
+                base.priceAsOf(),
+                base.createdAt(),
+                base.updatedAt(),
+                abs.compareTo(BigDecimal.ZERO) > 0 ? PassiveIncomeCalc.money(abs) : null,
+                abs.compareTo(BigDecimal.ZERO) > 0 ? basis : null
+        );
+    }
+
+    private static BigDecimal positiveOrNull(BigDecimal value) {
+        if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return value;
     }
 }

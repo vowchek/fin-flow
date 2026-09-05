@@ -52,6 +52,9 @@ public class StockInstrument implements Persistable<UUID> {
     @Column(name = "cashflow_until_year")
     private Integer cashflowUntilYear;
 
+    @Column(name = "pays_dividends", nullable = false)
+    private boolean paysDividends = true;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -69,6 +72,7 @@ public class StockInstrument implements Persistable<UUID> {
         this.currency = currency;
         this.enabled = true;
         this.assetKind = AssetKind.EQUITY;
+        this.paysDividends = true;
     }
 
     @PrePersist
@@ -174,6 +178,14 @@ public class StockInstrument implements Persistable<UUID> {
 
     public void setCashflowUntilYear(Integer cashflowUntilYear) {
         this.cashflowUntilYear = cashflowUntilYear;
+    }
+
+    public boolean isPaysDividends() {
+        return paysDividends;
+    }
+
+    public void setPaysDividends(boolean paysDividends) {
+        this.paysDividends = paysDividends;
     }
 
     public Instant getCreatedAt() {

@@ -15,8 +15,10 @@ import {
   PlusIcon,
 } from '../../components/IconButton'
 import { Modal } from '../../components/Modal'
+import { AssetDetailModal } from '../../components/AssetDetailModal'
 import { GrowthChartModal } from '../../components/GrowthChartModal'
 import { PaymentCalendarModal } from '../../components/PaymentCalendarModal'
+import { PnlBreakdownTip } from '../../components/PnlBreakdownTip'
 import { PortfolioModeIcon, portfolioModeLabel } from '../../components/PortfolioModeIcon'
 import { changeClass, formatMoney, formatPct } from '../../lib/format'
 import { LazySeedModal } from './LazySeedModal'
@@ -32,13 +34,15 @@ type Dialog =
   | { type: 'add-choice' }
   | { type: 'buy'; holding: Holding }
   | { type: 'sell'; holding: Holding }
+  | { type: 'holding-add'; holding: Holding }
+  | { type: 'holding-remove'; holding: Holding }
+  | { type: 'holding-dividend'; holding: Holding }
+  | { type: 'deleteHolding'; holding: Holding }
   | { type: 'history'; holding: Holding }
   | { type: 'deletePortfolio' }
   | { type: 'cash-in' }
   | { type: 'cash-deposit' }
   | { type: 'cash-withdraw' }
-  | { type: 'cash-dividend' }
-  | { type: 'cash-coupon' }
   | { type: 'settings' }
   | null
 
@@ -48,8 +52,14 @@ function todayIso() {
 
 function avgPrice(h: Holding) {
   if (h.cash) return 1
+  // Broker average from buys only — portfolio «вложено» is a separate manual field.
   if (h.costBasis == null || Number(h.quantity) <= 0) return null
   return Number(h.costBasis) / Number(h.quantity)
+}
+
+function holdingCost(h: Holding) {
+  if (h.cash || h.costBasis == null) return null
+  return Number(h.costBasis)
 }
 
 function sharePct(h: Holding, total: number | null | undefined) {
@@ -106,21 +116,22 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
   const [quantity, setQuantity] = useState('1')
   const [unitPrice, setUnitPrice] = useState('')
   const [occurredOn, setOccurredOn] = useState(todayIso())
+  const [addToInvested, setAddToInvested] = useState(true)
   const [trades, setTrades] = useState<Trade[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [showClosed, setShowClosed] = useState(false)
   const [growthOpen, setGrowthOpen] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
   const [cashNote, setCashNote] = useState('')
-  const [relatedHoldingId, setRelatedHoldingId] = useState('')
-  const [incomeReinvested, setIncomeReinvested] = useState(false)
   const [lazyExtendOpen, setLazyExtendOpen] = useState(false)
   const [passiveYear, setPassiveYear] = useState(() => new Date().getFullYear())
   const [passiveIncome, setPassiveIncome] = useState<PassiveIncome | null>(null)
   const [passiveLoading, setPassiveLoading] = useState(false)
   const [taxRateInput, setTaxRateInput] = useState('13')
+  const [investedAmountInput, setInvestedAmountInput] = useState('')
   const [portfolioNameInput, setPortfolioNameInput] = useState('')
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const [assetDetailId, setAssetDetailId] = useState<string | null>(null)
 
   const filteredCatalog = (() => {
     const q = query.trim().toLowerCase()
@@ -177,10 +188,13 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     if (portfolio?.taxRatePercent != null) {
       setTaxRateInput(String(portfolio.taxRatePercent))
     }
+    if (portfolio?.investedAmount != null) {
+      setInvestedAmountInput(String(portfolio.investedAmount))
+    }
     if (portfolio?.name) {
       setPortfolioNameInput(portfolio.name)
     }
-  }, [portfolio?.taxRatePercent, portfolio?.name])
+  }, [portfolio?.taxRatePercent, portfolio?.investedAmount, portfolio?.name])
 
   async function onSaveSettings(e: FormEvent) {
     e.preventDefault()
@@ -191,9 +205,17 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
         const updated = await portfoliosApi.updatePortfolioSettings(id, {
           name: portfolioNameInput.trim(),
           taxRatePercent: Number(taxRateInput),
+          investedAmount: Number(investedAmountInput),
         })
         setPortfolio((prev) =>
-          prev ? { ...prev, name: updated.name, taxRatePercent: updated.taxRatePercent } : prev,
+          prev
+            ? {
+                ...prev,
+                name: updated.name,
+                taxRatePercent: updated.taxRatePercent,
+                investedAmount: updated.investedAmount,
+              }
+            : prev,
         )
         const income = await portfoliosApi.getPassiveIncome(id, passiveYear)
         setPassiveIncome(income)
@@ -201,6 +223,7 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
         const updated = await portfoliosApi.updatePortfolio(kind, id, {
           name: portfolioNameInput.trim(),
           description: portfolio?.description ?? null,
+          investedAmount: Number(investedAmountInput),
         })
         setPortfolio(updated)
       }
@@ -216,25 +239,42 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     setQuantity('1')
     setUnitPrice('')
     setOccurredOn(todayIso())
+    setAddToInvested(true)
     setError(null)
   }
 
   function resetCashForm() {
     setCashAmount('')
     setCashNote('')
-    setRelatedHoldingId('')
-    setIncomeReinvested(false)
     setOccurredOn(todayIso())
     setError(null)
   }
 
-  function openCash(type: 'cash-deposit' | 'cash-withdraw' | 'cash-dividend' | 'cash-coupon') {
+  function openCash(type: 'cash-deposit' | 'cash-withdraw') {
     resetCashForm()
-    const assets = portfolio?.holdings.filter((h) => !h.cash && Number(h.quantity) > 0) ?? []
-    if ((type === 'cash-dividend' || type === 'cash-coupon') && assets[0]) {
-      setRelatedHoldingId(assets[0].id)
-    }
     setDialog({ type })
+  }
+
+  async function onHoldingDividend(e: FormEvent) {
+    e.preventDefault()
+    if (dialog?.type !== 'holding-dividend') return
+    setPending(true)
+    setError(null)
+    try {
+      await portfoliosApi.addDividend(id, {
+        amount: Number(cashAmount),
+        occurredOn,
+        note: cashNote.trim() || undefined,
+        relatedHoldingId: dialog.holding.id,
+        settleToCash: false,
+      })
+      setDialog(null)
+      await reload()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось сохранить дивиденд')
+    } finally {
+      setPending(false)
+    }
   }
 
   function openAdd() {
@@ -288,6 +328,7 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
         quantity: Number(quantity),
         occurredOn,
         unitPrice: unitPrice.trim() ? Number(unitPrice) : undefined,
+        addToInvested,
       })
       setDialog(null)
       await reload()
@@ -308,6 +349,7 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
         quantity: Number(quantity),
         occurredOn,
         unitPrice: unitPrice.trim() ? Number(unitPrice) : undefined,
+        addToInvested,
       })
       setDialog(null)
       await reload()
@@ -350,26 +392,34 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     }
   }
 
+  async function onDeleteHolding() {
+    if (dialog?.type !== 'deleteHolding') return
+    setPending(true)
+    setError(null)
+    try {
+      await portfoliosApi.deleteHolding(kind, id, dialog.holding.id)
+      setDialog(null)
+      await reload()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось удалить актив')
+    } finally {
+      setPending(false)
+    }
+  }
+
   async function onCashSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!dialog || !dialog.type.startsWith('cash-')) return
+    if (!dialog || (dialog.type !== 'cash-deposit' && dialog.type !== 'cash-withdraw')) return
     setPending(true)
     setError(null)
     const payload = {
       amount: Number(cashAmount),
       occurredOn,
       note: cashNote.trim() || undefined,
-      relatedHoldingId: relatedHoldingId || undefined,
-      settleToCash:
-        dialog.type === 'cash-dividend' || dialog.type === 'cash-coupon'
-          ? !incomeReinvested
-          : undefined,
     }
     try {
       if (dialog.type === 'cash-deposit') await portfoliosApi.depositCash(kind, id, payload)
-      else if (dialog.type === 'cash-withdraw') await portfoliosApi.withdrawCash(kind, id, payload)
-      else if (dialog.type === 'cash-dividend') await portfoliosApi.addDividend(id, payload)
-      else if (dialog.type === 'cash-coupon') await portfoliosApi.addCoupon(id, payload)
+      else await portfoliosApi.withdrawCash(kind, id, payload)
       setDialog(null)
       await reload()
     } catch (err) {
@@ -407,11 +457,16 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     ...(showClosed ? [...openHoldings, ...closedHoldings] : openHoldings),
     ...(cashHolding ? [cashHolding] : []),
   ]
-  const incomeAssets = openHoldings
-  const invested = portfolio.holdings.reduce<number | null>((sum, h) => {
-    if (Number(h.quantity) <= 0 || h.costBasis == null) return sum
-    return (sum ?? 0) + Number(h.costBasis)
-  }, null)
+  const invested =
+    portfolio.investedAmount != null ? Number(portfolio.investedAmount) : null
+  const totalValue = portfolio.totalValue != null ? Number(portfolio.totalValue) : null
+  const profitTotal =
+    totalValue != null && invested != null ? totalValue - invested : null
+  const profitPrice = assetHoldings.reduce((sum, h) => sum + Number(h.totalChangeAbs ?? 0), 0)
+  const profitIncome = assetHoldings.reduce((sum, h) => sum + Number(h.incomeAbs ?? 0), 0)
+  const profitOther =
+    profitTotal != null ? profitTotal - profitPrice - profitIncome : null
+  const showProfitTip = profitTotal != null
 
   return (
     <div className="page page-wide">
@@ -438,6 +493,9 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
               onClick={() => {
                 setPortfolioNameInput(portfolio.name)
                 setTaxRateInput(String(portfolio.taxRatePercent ?? 13))
+                setInvestedAmountInput(
+                  portfolio.investedAmount != null ? String(portfolio.investedAmount) : '',
+                )
                 setDialog({ type: 'settings' })
               }}
             >
@@ -472,9 +530,25 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
 
         <section className="pf-metric">
           <h2 className="pf-metric-title">Прибыль</h2>
-          <p className={`pf-metric-value ${changeClass(portfolio.totalChangeAbs)}`}>
-            {formatMoney(portfolio.totalChangeAbs, currency)}
-            <span className="pf-metric-pct">{formatPct(portfolio.totalChangePct)}</span>
+          <p className={`pf-metric-value ${changeClass(profitTotal)}`}>
+            {showProfitTip ? (
+              <PnlBreakdownTip
+                price={profitPrice}
+                income={profitIncome}
+                other={profitOther}
+                total={profitTotal}
+                currency={currency}
+              >
+                <span className={changeClass(profitTotal)}>{formatMoney(profitTotal, currency)}</span>
+              </PnlBreakdownTip>
+            ) : (
+              <span className={changeClass(profitTotal)}>{formatMoney(profitTotal, currency)}</span>
+            )}
+            <span className="pf-metric-pct">
+              {invested != null && invested > 0 && profitTotal != null
+                ? formatPct((profitTotal / invested) * 100)
+                : '—'}
+            </span>
           </p>
           <p className="pf-metric-sub">
             <span>За сегодня</span>
@@ -522,7 +596,13 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
               ) : null}
             </p>
             <p className="pf-metric-sub">
-              <span>В месяц</span>
+              <span>
+                {passiveIncome?.basis === 'ACTUAL'
+                  ? 'Факт · в месяц'
+                  : passiveIncome?.basis === 'FORECAST'
+                    ? 'Прогноз · в месяц'
+                    : 'В месяц'}
+              </span>
               <strong>{formatMoney(passiveIncome?.monthlyNet ?? 0, currency)}</strong>
             </p>
           </section>
@@ -564,7 +644,7 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                 <tr>
                   <th>Актив</th>
                   <th>Кол-во</th>
-                  <th>Вложено</th>
+                  <th>Себестоимость</th>
                   <th>Сейчас</th>
                   <th>За день</th>
                   <th>Прибыль</th>
@@ -581,17 +661,37 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                   const share = sharePct(h, portfolio.totalValue)
                   const income = Number(h.incomeAbs ?? 0)
                   const ret = totalReturn(h)
+                  const pricePart = pricePnl(h)
                   const retPct =
-                    ret != null && h.costBasis != null && Number(h.costBasis) > 0
-                      ? (ret / Number(h.costBasis)) * 100
+                    ret != null && holdingCost(h) != null && Number(holdingCost(h)) > 0
+                      ? (ret / Number(holdingCost(h))) * 100
                       : isCash
                         ? h.totalChangePct
                         : income > 0
                           ? null
                           : h.totalChangePct
-                  const showIncomeTip = !isCash && income > 0
+                  const showPnlTip = !isCash && (ret != null || pricePart != null || income !== 0)
                   return (
-                    <tr key={h.id} className={[closed ? 'closed' : '', isCash ? 'cash-row' : ''].filter(Boolean).join(' ') || undefined}>
+                    <tr
+                      key={h.id}
+                      className={[
+                        closed ? 'closed' : '',
+                        isCash ? 'cash-row' : '',
+                        'asset-row-clickable',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => setAssetDetailId(h.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setAssetDetailId(h.id)
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Открыть ${h.name || h.symbol}`}
+                    >
                       <td>
                         <div className="asset-cell">
                           <AssetLogo symbol={h.symbol} name={h.name} logoUrl={h.logoUrl} size={32} />
@@ -619,7 +719,7 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                           <div className="cell-main">—</div>
                         ) : (
                           <>
-                            <div className="cell-main">{formatMoney(h.costBasis, cur)}</div>
+                            <div className="cell-main">{formatMoney(holdingCost(h), cur)}</div>
                             <div className="cell-sub">{formatMoney(avg, cur)} / шт</div>
                           </>
                         )}
@@ -647,23 +747,19 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                           <div className="cell-main">—</div>
                         ) : (
                           <>
-                            <div className="cell-main pnl-tip">
-                              <span className={changeClass(ret)}>{formatMoney(ret, cur)}</span>
-                              {showIncomeTip ? (
-                                <span className="pnl-tip-box" role="tooltip">
-                                  <div>
-                                    От цены:{' '}
-                                    <span className={changeClass(pricePnl(h))}>{formatMoney(pricePnl(h), cur)}</span>
-                                  </div>
-                                  <div>
-                                    Дивиденды/купоны:{' '}
-                                    <span className={changeClass(income)}>{formatMoney(income, cur)}</span>
-                                  </div>
-                                  <div className="pnl-tip-total">
-                                    Всего: <span className={changeClass(ret)}>{formatMoney(ret, cur)}</span>
-                                  </div>
-                                </span>
-                              ) : null}
+                            <div className="cell-main">
+                              {showPnlTip ? (
+                                <PnlBreakdownTip
+                                  price={pricePart}
+                                  income={income}
+                                  total={ret}
+                                  currency={cur}
+                                >
+                                  <span className={changeClass(ret)}>{formatMoney(ret, cur)}</span>
+                                </PnlBreakdownTip>
+                              ) : (
+                                <span className={changeClass(ret)}>{formatMoney(ret, cur)}</span>
+                              )}
                             </div>
                             <div className={`cell-sub ${changeClass(retPct)}`}>{formatPct(retPct)}</div>
                           </>
@@ -673,7 +769,7 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                         <div className="cell-main">{share == null ? '—' : `${share.toFixed(1)}%`}</div>
                         <div className="cell-sub">портфеля</div>
                       </td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                         <span className="holding-actions">
                           {isCash ? (
                             <>
@@ -687,20 +783,21 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                           ) : (
                             <>
                               <IconButton
-                                label="Купить"
+                                label="Добавить"
                                 onClick={() => {
-                                  resetTradeForm()
-                                  setDialog({ type: 'buy', holding: h })
+                                  if (kind === 'stock') {
+                                    setDialog({ type: 'holding-add', holding: h })
+                                  } else {
+                                    resetTradeForm()
+                                    setDialog({ type: 'buy', holding: h })
+                                  }
                                 }}
                               >
                                 <PlusIcon />
                               </IconButton>
                               <IconButton
-                                label="Продать"
-                                onClick={() => {
-                                  resetTradeForm()
-                                  setDialog({ type: 'sell', holding: h })
-                                }}
+                                label="Убрать"
+                                onClick={() => setDialog({ type: 'holding-remove', holding: h })}
                               >
                                 <MinusIcon />
                               </IconButton>
@@ -825,6 +922,18 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
             <label htmlFor="occurredOn">Дата покупки</label>
             <input id="occurredOn" type="date" required value={occurredOn} onChange={(e) => setOccurredOn(e.target.value)} />
           </div>
+          <label className="field-check">
+            <input
+              type="checkbox"
+              checked={addToInvested}
+              onChange={(e) => setAddToInvested(e.target.checked)}
+            />
+            <span>
+              <strong>Добавить во вложенное</strong>
+              <br />
+              <span className="muted">Новые деньги. Снимите, если покупка на дивиденды.</span>
+            </span>
+          </label>
           {error && dialog?.type === 'add' && <p className="error">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setDialog(null)}>Отмена</button>
@@ -855,6 +964,18 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
             <label htmlFor="buy-date">Дата</label>
             <input id="buy-date" type="date" required value={occurredOn} onChange={(e) => setOccurredOn(e.target.value)} />
           </div>
+          <label className="field-check">
+            <input
+              type="checkbox"
+              checked={addToInvested}
+              onChange={(e) => setAddToInvested(e.target.checked)}
+            />
+            <span>
+              <strong>Добавить во вложенное</strong>
+              <br />
+              <span className="muted">Новые деньги. Снимите, если покупка на дивиденды.</span>
+            </span>
+          </label>
           {error && dialog?.type === 'buy' && <p className="error">{error}</p>}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setDialog(null)}>Отмена</button>
@@ -928,20 +1049,8 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
         <div className="stack cash-in-choices">
           <button type="button" className="cash-in-choice" onClick={() => openCash('cash-deposit')}>
             <strong>Пополнение</strong>
-            <span>Депозит — увеличивает вложенное</span>
+            <span>Депозит — свои деньги на счёт</span>
           </button>
-          {kind === 'stock' ? (
-            <>
-              <button type="button" className="cash-in-choice" onClick={() => openCash('cash-dividend')}>
-                <strong>Дивиденд</strong>
-                <span>Прибыль от компании из портфеля</span>
-              </button>
-              <button type="button" className="cash-in-choice" onClick={() => openCash('cash-coupon')}>
-                <strong>Купон</strong>
-                <span>Прибыль по облигации из портфеля</span>
-              </button>
-            </>
-          ) : null}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setDialog(null)}>
               Отмена
@@ -951,51 +1060,162 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
       </Modal>
 
       <Modal
-        open={
-          dialog?.type === 'cash-deposit' ||
-          dialog?.type === 'cash-withdraw' ||
-          dialog?.type === 'cash-dividend' ||
-          dialog?.type === 'cash-coupon'
-        }
+        open={dialog?.type === 'holding-add'}
+        title={dialog?.type === 'holding-add' ? `Добавить · ${dialog.holding.symbol}` : 'Добавить'}
+        onClose={() => setDialog(null)}
+      >
+        {dialog?.type === 'holding-add' ? (
+          <div className="stack cash-in-choices">
+            <button
+              type="button"
+              className="cash-in-choice"
+              onClick={() => {
+                const holding = dialog.holding
+                resetTradeForm()
+                setDialog({ type: 'buy', holding })
+              }}
+            >
+              <strong>Покупка</strong>
+              <span>Докупить акции — меняет количество и себестоимость</span>
+            </button>
+            <button
+              type="button"
+              className="cash-in-choice"
+              onClick={() => {
+                const holding = dialog.holding
+                resetCashForm()
+                setDialog({ type: 'holding-dividend', holding })
+              }}
+            >
+              <strong>Дивиденд</strong>
+              <span>Только в прибыль по активу (вложенное не трогает)</span>
+            </button>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setDialog(null)}>
+                Отмена
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={dialog?.type === 'holding-remove'}
+        title={dialog?.type === 'holding-remove' ? `Убрать · ${dialog.holding.symbol}` : 'Убрать'}
+        onClose={() => setDialog(null)}
+      >
+        {dialog?.type === 'holding-remove' ? (
+          <div className="stack cash-in-choices">
+            <button
+              type="button"
+              className="cash-in-choice"
+              onClick={() => {
+                const holding = dialog.holding
+                resetTradeForm()
+                setDialog({ type: 'sell', holding })
+              }}
+            >
+              <strong>Продать</strong>
+              <span>Зафиксировать продажу — количество и цена</span>
+            </button>
+            <button
+              type="button"
+              className="cash-in-choice"
+              onClick={() => setDialog({ type: 'deleteHolding', holding: dialog.holding })}
+            >
+              <strong>Удалить из портфеля</strong>
+              <span>Убрать позицию и историю сделок без продажи</span>
+            </button>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setDialog(null)}>
+                Отмена
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={dialog?.type === 'deleteHolding'}
+        title={dialog?.type === 'deleteHolding' ? `Удалить ${dialog.holding.symbol}?` : 'Удалить актив?'}
+        onClose={() => !pending && setDialog(null)}
+      >
+        <p className="muted" style={{ marginTop: 0 }}>
+          Позиция и история сделок будут удалены. Это не продажа — наличные и уже учтённый кэш не
+          меняются.
+        </p>
+        {error && dialog?.type === 'deleteHolding' && <p className="error">{error}</p>}
+        <div className="modal-actions">
+          <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setDialog(null)}>
+            Отмена
+          </button>
+          <button type="button" className="btn btn-danger" disabled={pending} onClick={() => void onDeleteHolding()}>
+            {pending ? 'Удаляем…' : 'Удалить'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={dialog?.type === 'holding-dividend'}
+        title={dialog?.type === 'holding-dividend' ? `Дивиденд · ${dialog.holding.symbol}` : 'Дивиденд'}
+        onClose={() => !pending && setDialog(null)}
+      >
+        <form className="stack" onSubmit={onHoldingDividend}>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Укажите сумму до налога. В прибыль по активу попадёт за вычетом налога из настроек портфеля.
+            На «вложенное» не влияет.
+          </p>
+          <div className="field">
+            <label htmlFor="div-amount">Сумма, {currency}</label>
+            <input
+              id="div-amount"
+              type="number"
+              step="any"
+              min="0"
+              required
+              autoFocus
+              value={cashAmount}
+              onChange={(e) => setCashAmount(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="div-date">Дата</label>
+            <input
+              id="div-date"
+              type="date"
+              required
+              value={occurredOn}
+              onChange={(e) => setOccurredOn(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="div-note">Комментарий</label>
+            <input id="div-note" value={cashNote} onChange={(e) => setCashNote(e.target.value)} />
+          </div>
+          {error && dialog?.type === 'holding-dividend' && <p className="error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setDialog(null)}>
+              Отмена
+            </button>
+            <button type="submit" className="btn" disabled={pending}>
+              {pending ? 'Сохраняем…' : 'Добавить дивиденд'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={dialog?.type === 'cash-deposit' || dialog?.type === 'cash-withdraw'}
         title={
           dialog?.type === 'cash-deposit'
             ? 'Пополнить валюту'
             : dialog?.type === 'cash-withdraw'
               ? 'Вывести валюту'
-              : dialog?.type === 'cash-dividend'
-                ? 'Дивиденд'
-                : dialog?.type === 'cash-coupon'
-                  ? 'Купон'
-                  : 'Валюта'
+              : 'Валюта'
         }
         onClose={() => !pending && setDialog(null)}
       >
         <form className="stack" onSubmit={onCashSubmit}>
-          {(dialog?.type === 'cash-dividend' || dialog?.type === 'cash-coupon') && (
-            <div className="field">
-              <label htmlFor="related-holding">Компания</label>
-              <select
-                id="related-holding"
-                required
-                value={relatedHoldingId}
-                onChange={(e) => setRelatedHoldingId(e.target.value)}
-              >
-                <option value="" disabled>
-                  Выберите актив
-                </option>
-                {incomeAssets.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.symbol} — {h.name || h.symbol}
-                  </option>
-                ))}
-              </select>
-              {incomeAssets.length === 0 ? (
-                <p className="muted" style={{ marginBottom: 0 }}>
-                  Сначала добавьте акции или облигации в портфель
-                </p>
-              ) : null}
-            </div>
-          )}
           <div className="field">
             <label htmlFor="cash-amount">Сумма ({currency})</label>
             <input
@@ -1019,42 +1239,17 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
           </div>
           {dialog?.type === 'cash-deposit' ? (
             <p className="muted" style={{ marginTop: 0 }}>
-              Пополнение увеличивает вложенное.
+              Пополнение увеличивает баланс валюты.
             </p>
           ) : null}
-          {dialog?.type === 'cash-dividend' || dialog?.type === 'cash-coupon' ? (
-            <>
-              <label className="field-check">
-                <input
-                  type="checkbox"
-                  checked={incomeReinvested}
-                  onChange={(e) => setIncomeReinvested(e.target.checked)}
-                />
-                <span>
-                  Реинвест / потрачены — не зачислять на валюту, только в прибыль актива
-                </span>
-              </label>
-              <p className="muted" style={{ marginTop: 0 }}>
-                {incomeReinvested
-                  ? 'Сумма учтётся у компании, баланс RUB не изменится.'
-                  : 'Сумма поступит на валюту и будет учтена у выбранной компании.'}
-              </p>
-            </>
-          ) : null}
-          {error && dialog?.type?.startsWith('cash-') && <p className="error">{error}</p>}
+          {error && (dialog?.type === 'cash-deposit' || dialog?.type === 'cash-withdraw') && (
+            <p className="error">{error}</p>
+          )}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setDialog(null)}>
               Отмена
             </button>
-            <button
-              type="submit"
-              className="btn"
-              disabled={
-                pending ||
-                ((dialog?.type === 'cash-dividend' || dialog?.type === 'cash-coupon') &&
-                  (!relatedHoldingId || incomeAssets.length === 0))
-              }
-            >
+            <button type="submit" className="btn" disabled={pending}>
               {pending ? 'Сохраняем…' : 'Сохранить'}
             </button>
           </div>
@@ -1084,6 +1279,21 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
               onChange={(e) => setPortfolioNameInput(e.target.value)}
             />
           </div>
+          <div className="field">
+            <label htmlFor="invested-amount">Вложено, {currency}</label>
+            <input
+              id="invested-amount"
+              type="number"
+              step="any"
+              min="0"
+              required
+              value={investedAmountInput}
+              onChange={(e) => setInvestedAmountInput(e.target.value)}
+            />
+          </div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Сколько денег реально внесли. Не меняется от дивидендов и средней цены позиций.
+          </p>
           {kind === 'stock' ? (
             <>
               <div className="field">
@@ -1100,7 +1310,8 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                 />
               </div>
               <p className="muted" style={{ marginTop: 0 }}>
-                Прогноз пассивного дохода показывается после налога. На уже записанные выплаты не влияет.
+                Налог применяется к прогнозу пассивного дохода и к записанным дивидендам/купонам в
+                прибыли.
               </p>
             </>
           ) : null}
@@ -1133,6 +1344,14 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
         portfolioName={portfolio.name}
         currency={currency}
         onClose={() => setGrowthOpen(false)}
+      />
+
+      <AssetDetailModal
+        open={assetDetailId != null}
+        kind={kind}
+        portfolioId={portfolio.id}
+        holdingId={assetDetailId}
+        onClose={() => setAssetDetailId(null)}
       />
 
       {kind === 'stock' ? (

@@ -4,6 +4,7 @@ import com.ledger.api.dto.CashMovementRequest;
 import com.ledger.api.dto.HoldingCashflowRequest;
 import com.ledger.api.dto.HoldingCashflowResponse;
 import com.ledger.api.dto.HoldingCreateRequest;
+import com.ledger.api.dto.HoldingDetailResponse;
 import com.ledger.api.dto.HoldingResponse;
 import com.ledger.api.dto.LazyStockSeedRequest;
 import com.ledger.api.dto.PassiveIncomeResponse;
@@ -144,6 +145,13 @@ public class StockPortfolioController {
         return portfolios.sell(id, holdingId, request);
     }
 
+    @DeleteMapping("/{id}/holdings/{holdingId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Удалить позицию из портфеля (без продажи)")
+    public void deleteHolding(@PathVariable UUID id, @PathVariable UUID holdingId) {
+        portfolios.deleteHolding(id, holdingId);
+    }
+
     @PostMapping("/{id}/cash/deposits")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Внести наличные")
@@ -176,6 +184,12 @@ public class StockPortfolioController {
     @Operation(summary = "История сделок по позиции")
     public List<TradeResponse> transactions(@PathVariable UUID id, @PathVariable UUID holdingId) {
         return portfolios.listTransactions(id, holdingId);
+    }
+
+    @GetMapping("/{id}/holdings/{holdingId}/detail")
+    @Operation(summary = "Карточка актива: цена, день, график, дивиденды")
+    public HoldingDetailResponse holdingDetail(@PathVariable UUID id, @PathVariable UUID holdingId) {
+        return portfolios.holdingDetail(id, holdingId);
     }
 
     @GetMapping("/{id}/holdings/{holdingId}/cashflow")

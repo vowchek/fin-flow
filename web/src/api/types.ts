@@ -28,10 +28,32 @@ export type Holding = {
   totalChangeAbs: number | null
   totalChangePct: number | null
   incomeAbs: number | null
+  reinvestedIncomeAbs?: number | null
   currency: string | null
   priceAsOf: string | null
   createdAt: string
   updatedAt: string
+  expectedIncomeAbs?: number | null
+  expectedIncomeBasis?: string | null
+}
+
+export type HoldingDetail = {
+  holdingId: string
+  symbol: string
+  name: string | null
+  logoUrl: string | null
+  cash: boolean
+  quantity: number
+  unitPrice: number | null
+  dayChangeAbs: number | null
+  dayChangePct: number | null
+  marketValue: number | null
+  currency: string | null
+  priceHistory: ValuePoint[]
+  dividendThisYearPerUnit?: number | null
+  dividendThisYearBasis?: string | null
+  dividendNextYearPerUnit?: number | null
+  dividendNextYearBasis?: string | null
 }
 
 export type ValuePoint = {
@@ -73,6 +95,7 @@ export type PortfolioDetail = {
   totalChangePct: number | null
   currency: string | null
   taxRatePercent?: number | null
+  investedAmount?: number | null
   createdAt: string
   updatedAt: string
 }
@@ -95,6 +118,10 @@ export type PassiveIncome = {
   annualNet: number
   monthlyNet: number
   currency: string
+  /** ACTUAL | FORECAST | NONE */
+  basis?: string | null
+  /** Median YoY growth % used for forecast */
+  growthPct?: number | null
 }
 
 export type MarketStripItem = {
@@ -127,6 +154,8 @@ export type TradePayload = {
   occurredOn?: string
   unitPrice?: number
   note?: string
+  /** Default true: new money. False: buy from dividends — do not increase invested. */
+  addToInvested?: boolean
 }
 
 export type Instrument = {
@@ -142,6 +171,7 @@ export type Instrument = {
   annualCashflowPerUnit?: number | null
   cashflowGrowthPct?: number | null
   cashflowUntilYear?: number | null
+  paysDividends?: boolean | null
 }
 
 export type PaymentCalendarItem = {

@@ -4,6 +4,7 @@ import com.ledger.api.dto.CashMovementRequest;
 import com.ledger.api.dto.HoldingCashflowRequest;
 import com.ledger.api.dto.HoldingCashflowResponse;
 import com.ledger.api.dto.HoldingCreateRequest;
+import com.ledger.api.dto.HoldingDetailResponse;
 import com.ledger.api.dto.HoldingResponse;
 import com.ledger.api.dto.LazyStockSeedRequest;
 import com.ledger.api.dto.PassiveIncomeResponse;
@@ -22,12 +23,14 @@ import com.ledger.domain.AssetMarket;
 import com.ledger.domain.CatalogItem;
 import com.ledger.domain.StockHolding;
 import com.ledger.domain.StockInstrument;
+import com.ledger.domain.StockInstrumentPayment;
 import com.ledger.domain.StockPortfolio;
 import com.ledger.domain.StockTransaction;
 import com.ledger.domain.TradeSide;
 import com.ledger.domain.TxKind;
 import com.ledger.infrastructure.marketdata.MarketDataProperties;
 import com.ledger.infrastructure.persistence.StockHoldingRepository;
+import com.ledger.infrastructure.persistence.StockInstrumentPaymentRepository;
 import com.ledger.infrastructure.persistence.StockInstrumentRepository;
 import com.ledger.infrastructure.persistence.StockPortfolioRepository;
 import com.ledger.infrastructure.persistence.StockTransactionRepository;
@@ -41,8 +44,11 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class StockPortfolioService {
@@ -54,6 +60,7 @@ public class StockPortfolioService {
     private final StockHoldingRepository holdings;
     private final StockTransactionRepository transactions;
     private final StockInstrumentRepository instruments;
+    private final StockInstrumentPaymentRepository instrumentPayments;
     private final UserRepository users;
     private final CurrentUserService currentUser;
     private final CatalogService catalog;
@@ -66,6 +73,7 @@ public class StockPortfolioService {
             StockHoldingRepository holdings,
             StockTransactionRepository transactions,
             StockInstrumentRepository instruments,
+            StockInstrumentPaymentRepository instrumentPayments,
             UserRepository users,
             CurrentUserService currentUser,
             CatalogService catalog,
@@ -77,6 +85,7 @@ public class StockPortfolioService {
         this.holdings = holdings;
         this.transactions = transactions;
         this.instruments = instruments;
+        this.instrumentPayments = instrumentPayments;
         this.users = users;
         this.currentUser = currentUser;
         this.catalog = catalog;
@@ -143,6 +152,9 @@ public class StockPortfolioService {
         StockPortfolio portfolio = requireOwned(id);
         portfolio.setName(request.name().trim());
         portfolio.setDescription(Strings.trimToNull(request.description()));
+        if (request.investedAmount() != null) {
+            portfolio.setInvestedAmount(request.investedAmount());
+        }
         return toDetail(portfolio);
     }
 
@@ -166,8 +178,19 @@ public class StockPortfolioService {
             if (item.occurredOn() == null) {
                 throw new IllegalArgumentException("occurredOn is required for lazy stock seed: " + item.symbol());
             }
-            openHolding(portfolioId, item);
+            // Invested is set once below — do not add each position cost again.
+            openHolding(portfolioId, new HoldingCreateRequest(
+                    item.instrumentId(),
+                    item.symbol(),
+                    item.name(),
+                    item.quantity(),
+                    item.occurredOn(),
+                    item.unitPrice(),
+                    item.note(),
+                    false
+            ));
         }
+        portfolio.setInvestedAmount(request.investedAmount());
         return toDetail(requireOwned(portfolioId));
     }
 
@@ -193,7 +216,9 @@ public class StockPortfolioService {
         } catch (DataIntegrityViolationException ex) {
             throw new ConflictException("Holding already exists for symbol: " + instrument.symbol());
         }
-        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, request.unitPrice(), request.note());
+        BigDecimal price = quotes.resolveTradePrice(instrument, occurredOn, request.unitPrice());
+        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, price, request.note());
+        addToInvestedIfNeeded(portfolio, request.quantity().multiply(price), request.addToInvested());
         return toHolding(holding);
     }
 
@@ -203,7 +228,9 @@ public class StockPortfolioService {
         rejectCashHolding(holding);
         CatalogItem instrument = catalog.requireBySymbol(MARKET, holding.getSymbol());
         LocalDate occurredOn = request.occurredOn() == null ? LocalDate.now() : request.occurredOn();
-        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, request.unitPrice(), request.note());
+        BigDecimal price = quotes.resolveTradePrice(instrument, occurredOn, request.unitPrice());
+        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, price, request.note());
+        addToInvestedIfNeeded(holding.getPortfolio(), request.quantity().multiply(price), request.addToInvested());
         return toHolding(holding);
     }
 
@@ -218,6 +245,14 @@ public class StockPortfolioService {
         }
         applyTrade(holding, instrument, TradeSide.SELL, request.quantity(), occurredOn, request.unitPrice(), request.note());
         return toHolding(holding);
+    }
+
+    /** Remove position and its trades without recording a sell (cash / settled income stays as-is). */
+    @Transactional
+    public void deleteHolding(UUID portfolioId, UUID holdingId) {
+        StockHolding holding = requireOwnedHolding(portfolioId, holdingId);
+        rejectCashHolding(holding);
+        holdings.delete(holding);
     }
 
     @Transactional
@@ -253,16 +288,45 @@ public class StockPortfolioService {
         StockPortfolio portfolio = requireOwned(portfolioId);
         ensureCashHolding(portfolio);
         int selectedYear = year == null ? PassiveIncomeCalc.baseYear() : year;
-        int baseYear = PassiveIncomeCalc.baseYear();
+        int asOfYear = PassiveIncomeCalc.baseYear();
+
+        List<StockHolding> active = portfolio.getHoldings().stream()
+                .filter(h -> !h.isCash() && h.getQuantity().compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+        Map<String, StockInstrument> bySymbol = new HashMap<>();
+        for (StockHolding holding : active) {
+            instruments.findBySymbol(holding.getSymbol()).ifPresent(i -> bySymbol.put(holding.getSymbol(), i));
+        }
+        List<UUID> instrumentIds = bySymbol.values().stream().map(StockInstrument::getId).distinct().toList();
+        Map<UUID, List<StockInstrumentPayment>> paymentsByInstrument = instrumentIds.isEmpty()
+                ? Map.of()
+                : instrumentPayments.findByInstrumentIdIn(instrumentIds).stream()
+                        .collect(Collectors.groupingBy(p -> p.getInstrument().getId()));
+
         BigDecimal gross = BigDecimal.ZERO;
-        for (StockHolding holding : portfolio.getHoldings()) {
-            if (holding.isCash() || holding.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+        PassiveIncomeCalc.Basis portfolioBasis = PassiveIncomeCalc.Basis.NONE;
+        BigDecimal growthPct = null;
+        for (StockHolding holding : active) {
+            StockInstrument instrument = bySymbol.get(holding.getSymbol());
+            if (instrument == null) {
                 continue;
             }
-            StockInstrument instrument = instruments.findBySymbol(holding.getSymbol()).orElse(null);
-            gross = gross.add(PassiveIncomeCalc.grossForHolding(
-                    holding.getQuantity(), instrument, selectedYear, baseYear));
+            List<StockInstrumentPayment> pays =
+                    paymentsByInstrument.getOrDefault(instrument.getId(), List.of());
+            PassiveIncomeCalc.YearEstimate estimate = PassiveIncomeCalc.perUnitForYear(
+                    pays, instrument.getAssetKind(), instrument.isPaysDividends(), selectedYear, asOfYear);
+            gross = gross.add(holding.getQuantity().multiply(estimate.perUnit()));
+            if (estimate.basis() == PassiveIncomeCalc.Basis.FORECAST) {
+                portfolioBasis = PassiveIncomeCalc.Basis.FORECAST;
+                if (growthPct == null && estimate.growthPctUsed() != null) {
+                    growthPct = estimate.growthPctUsed();
+                }
+            } else if (estimate.basis() == PassiveIncomeCalc.Basis.ACTUAL
+                    && portfolioBasis != PassiveIncomeCalc.Basis.FORECAST) {
+                portfolioBasis = PassiveIncomeCalc.Basis.ACTUAL;
+            }
         }
+
         BigDecimal tax = portfolio.getTaxRatePercent();
         BigDecimal net = PassiveIncomeCalc.afterTax(gross, tax);
         BigDecimal monthly = net.divide(BigDecimal.valueOf(12), 8, RoundingMode.HALF_UP);
@@ -272,7 +336,9 @@ public class StockPortfolioService {
                 PassiveIncomeCalc.money(gross),
                 PassiveIncomeCalc.money(net),
                 PassiveIncomeCalc.money(monthly),
-                marketDataProperties.quoteCurrency(MARKET)
+                marketDataProperties.quoteCurrency(MARKET),
+                portfolioBasis.name(),
+                growthPct
         );
     }
 
@@ -281,7 +347,12 @@ public class StockPortfolioService {
         StockPortfolio portfolio = requireOwned(portfolioId);
         portfolio.setName(request.name().trim());
         portfolio.setTaxRatePercent(request.taxRatePercent());
-        return new PortfolioSettingsResponse(portfolio.getName(), portfolio.getTaxRatePercent());
+        portfolio.setInvestedAmount(request.investedAmount());
+        return new PortfolioSettingsResponse(
+                portfolio.getName(),
+                portfolio.getTaxRatePercent(),
+                portfolio.getInvestedAmount()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -289,36 +360,35 @@ public class StockPortfolioService {
         StockPortfolio portfolio = requireOwned(portfolioId);
         ensureCashHolding(portfolio);
         int selectedYear = year == null ? LocalDate.now().getYear() : year;
-        var provider = quotes.requireProvider(MARKET);
         List<PaymentCalendarResponse.PaymentCalendarItem> items = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
         for (StockHolding holding : portfolio.getHoldings()) {
             if (holding.isCash() || holding.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
             }
-            CatalogItem item = catalog.findBySymbol(MARKET, holding.getSymbol());
-            String externalId = item != null ? item.externalId() : holding.getSymbol();
-            String displayName = item != null && item.name() != null
-                    ? item.name()
-                    : (holding.getName() != null ? holding.getName() : holding.getSymbol());
-            for (var payment : provider.fetchCorporatePayments(externalId)) {
-                if (payment.date() == null || payment.date().getYear() != selectedYear) {
+            StockInstrument instrument = instruments.findBySymbol(holding.getSymbol()).orElse(null);
+            if (instrument == null) {
+                continue;
+            }
+            String displayName = instrument.getName() != null ? instrument.getName() : holding.getSymbol();
+            for (StockInstrumentPayment payment : instrumentPayments.findByInstrumentIdOrderByOccurredOnDesc(instrument.getId())) {
+                int divYear = PassiveIncomeCalc.dividendYear(payment.getOccurredOn(), payment.getKind());
+                if (divYear != selectedYear) {
                     continue;
                 }
-                if (payment.valuePerUnit() == null || payment.valuePerUnit().compareTo(BigDecimal.ZERO) <= 0) {
-                    continue;
-                }
-                BigDecimal amount = payment.valuePerUnit().multiply(holding.getQuantity());
+                BigDecimal amount = payment.getAmountPerUnit().multiply(holding.getQuantity());
                 total = total.add(amount);
                 items.add(new PaymentCalendarResponse.PaymentCalendarItem(
                         holding.getSymbol(),
                         displayName,
-                        payment.kind(),
-                        payment.date(),
-                        PassiveIncomeCalc.money(payment.valuePerUnit()),
+                        payment.getKind().name(),
+                        payment.getOccurredOn(),
+                        PassiveIncomeCalc.money(payment.getAmountPerUnit()),
                         holding.getQuantity(),
                         PassiveIncomeCalc.money(amount),
-                        payment.currency() != null ? payment.currency() : marketDataProperties.quoteCurrency(MARKET)
+                        payment.getCurrency() != null
+                                ? payment.getCurrency()
+                                : marketDataProperties.quoteCurrency(MARKET)
                 ));
             }
         }
@@ -395,7 +465,25 @@ public class StockPortfolioService {
             }
         }
 
-        applyCashTx(cash, side, kind, related, request.amount(), occurredOn, unitPrice, request.note(), settleToCash);
+        // Store gross; P&L uses after-tax. Cash credited at net when settled.
+        BigDecimal amount = request.amount();
+        BigDecimal cashDelta = amount;
+        if (kind == TxKind.DIVIDEND || kind == TxKind.COUPON) {
+            cashDelta = PassiveIncomeCalc.money(
+                    PassiveIncomeCalc.afterTax(amount, portfolio.getTaxRatePercent()));
+        }
+        applyCashTx(
+                cash,
+                side,
+                kind,
+                related,
+                amount,
+                cashDelta,
+                occurredOn,
+                unitPrice,
+                request.note(),
+                settleToCash
+        );
         return toHolding(cash);
     }
 
@@ -405,6 +493,7 @@ public class StockPortfolioService {
             TxKind kind,
             StockHolding relatedHolding,
             BigDecimal quantity,
+            BigDecimal cashDelta,
             LocalDate occurredOn,
             BigDecimal unitPrice,
             String note,
@@ -429,9 +518,9 @@ public class StockPortfolioService {
             return;
         }
         if (side == TradeSide.BUY) {
-            cash.setQuantity(cash.getQuantity().add(quantity));
+            cash.setQuantity(cash.getQuantity().add(cashDelta));
         } else {
-            cash.setQuantity(cash.getQuantity().subtract(quantity));
+            cash.setQuantity(cash.getQuantity().subtract(cashDelta));
         }
     }
 
@@ -491,7 +580,9 @@ public class StockPortfolioService {
             BigDecimal unitPrice,
             String note
     ) {
-        BigDecimal price = quotes.resolveTradePrice(instrument, occurredOn, unitPrice);
+        BigDecimal price = unitPrice != null && unitPrice.compareTo(BigDecimal.ZERO) > 0
+                ? unitPrice
+                : quotes.resolveTradePrice(instrument, occurredOn, unitPrice);
         StockTransaction tx = new StockTransaction(
                 UUID.randomUUID(),
                 holding,
@@ -507,6 +598,17 @@ public class StockPortfolioService {
         } else {
             holding.setQuantity(holding.getQuantity().subtract(quantity));
         }
+    }
+
+    private void addToInvestedIfNeeded(StockPortfolio portfolio, BigDecimal spend, Boolean addToInvested) {
+        if (addToInvested != null && !addToInvested) {
+            return;
+        }
+        if (spend == null || spend.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        BigDecimal current = portfolio.getInvestedAmount() == null ? BigDecimal.ZERO : portfolio.getInvestedAmount();
+        portfolio.setInvestedAmount(current.add(spend));
     }
 
     private StockHolding requireOwnedHolding(UUID portfolioId, UUID holdingId) {
@@ -539,6 +641,7 @@ public class StockPortfolioService {
                 (int) active,
                 holdingResponses,
                 marketDataProperties.quoteCurrency(MARKET),
+                portfolio.getInvestedAmount(),
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );
@@ -556,6 +659,7 @@ public class StockPortfolioService {
                 List.of(),
                 marketDataProperties.quoteCurrency(MARKET),
                 portfolio.getTaxRatePercent(),
+                portfolio.getInvestedAmount(),
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );
@@ -569,6 +673,84 @@ public class StockPortfolioService {
                         .thenComparing(StockHolding::getSymbol))
                 .map(this::toHolding)
                 .toList();
+    }
+
+    @Transactional
+    public HoldingDetailResponse holdingDetail(UUID portfolioId, UUID holdingId) {
+        StockHolding holding = requireOwnedHolding(portfolioId, holdingId);
+        HoldingResponse valued = toHolding(holding);
+
+        List<ValuePointResponse> priceHistory = List.of();
+        BigDecimal divThis = null;
+        String basisThis = null;
+        BigDecimal divNext = null;
+        String basisNext = null;
+
+        if (!holding.isCash()) {
+            CatalogItem item = catalog.findBySymbol(MARKET, holding.getSymbol());
+            if (item != null) {
+                LocalDate to = LocalDate.now();
+                LocalDate from = to.minusYears(5);
+                quotes.ensureHistory(item, from, to);
+                priceHistory = quotes.priceSeries(item, from, to).entrySet().stream()
+                        .map(e -> new ValuePointResponse(e.getKey(), e.getValue(), null))
+                        .toList();
+            }
+
+            StockInstrument instrument = instruments.findBySymbol(holding.getSymbol()).orElse(null);
+            if (instrument != null) {
+                List<StockInstrumentPayment> pays =
+                        instrumentPayments.findByInstrumentIdOrderByOccurredOnDesc(instrument.getId());
+                int asOfYear = PassiveIncomeCalc.baseYear();
+                PassiveIncomeCalc.YearEstimate thisYear = PassiveIncomeCalc.perUnitForYear(
+                        pays, instrument.getAssetKind(), instrument.isPaysDividends(), asOfYear, asOfYear);
+                PassiveIncomeCalc.YearEstimate nextYear = PassiveIncomeCalc.perUnitForYear(
+                        pays, instrument.getAssetKind(), instrument.isPaysDividends(), asOfYear + 1, asOfYear);
+                if (thisYear.perUnit().compareTo(BigDecimal.ZERO) > 0) {
+                    divThis = PassiveIncomeCalc.money(thisYear.perUnit());
+                    basisThis = thisYear.basis().name();
+                }
+                if (nextYear.perUnit().compareTo(BigDecimal.ZERO) > 0) {
+                    divNext = PassiveIncomeCalc.money(nextYear.perUnit());
+                    basisNext = nextYear.basis().name();
+                }
+            }
+        }
+
+        return new HoldingDetailResponse(
+                valued.id(),
+                valued.symbol(),
+                valued.name(),
+                valued.logoUrl(),
+                valued.cash(),
+                valued.quantity(),
+                valued.unitPrice(),
+                unitDayChangeAbs(valued),
+                valued.dayChangePct(),
+                valued.marketValue(),
+                valued.currency(),
+                priceHistory,
+                divThis,
+                basisThis,
+                divNext,
+                basisNext
+        );
+    }
+
+    /** Day change for one unit (not position total). */
+    private static BigDecimal unitDayChangeAbs(HoldingResponse valued) {
+        if (valued.unitPrice() == null || valued.dayChangePct() == null) {
+            return null;
+        }
+        if (valued.quantity() == null || valued.quantity().compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+        if (valued.dayChangeAbs() == null) {
+            return null;
+        }
+        return valued.dayChangeAbs()
+                .divide(valued.quantity(), 8, RoundingMode.HALF_UP)
+                .setScale(4, RoundingMode.HALF_UP);
     }
 
     private HoldingResponse toHolding(StockHolding holding) {
@@ -593,19 +775,34 @@ public class StockPortfolioService {
                 null,
                 null,
                 null,
+                reinvestedIncomeAbsFor(holding),
                 null,
                 null,
                 holding.getCreatedAt(),
-                holding.getUpdatedAt()
+                holding.getUpdatedAt(),
+                null,
+                null
         );
-        BigDecimal incomeAbs = incomeAbsFor(holding.getId());
+        BigDecimal incomeAbs = incomeAbsFor(holding);
         return HoldingValuation.enrich(base, MARKET, catalog, quotes, tradesFor(holding.getId()), incomeAbs);
     }
 
-    private BigDecimal incomeAbsFor(UUID holdingId) {
-        return transactions.findByRelatedHoldingIdAndKindIn(holdingId, INCOME_KINDS).stream()
+    /** Dividend/coupon income after portfolio tax (gross is stored on the transaction). */
+    private BigDecimal incomeAbsFor(StockHolding holding) {
+        BigDecimal gross = transactions.findByRelatedHoldingIdAndKindIn(holding.getId(), INCOME_KINDS).stream()
                 .map(StockTransaction::getQuantity)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return PassiveIncomeCalc.money(
+                PassiveIncomeCalc.afterTax(gross, holding.getPortfolio().getTaxRatePercent()));
+    }
+
+    private BigDecimal reinvestedIncomeAbsFor(StockHolding holding) {
+        BigDecimal gross = transactions.findByRelatedHoldingIdAndKindIn(holding.getId(), INCOME_KINDS).stream()
+                .filter(tx -> !tx.isSettleToCash())
+                .map(StockTransaction::getQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return PassiveIncomeCalc.money(
+                PassiveIncomeCalc.afterTax(gross, holding.getPortfolio().getTaxRatePercent()));
     }
 
     private List<HoldingValuation.TradeInfo> tradesFor(UUID holdingId) {

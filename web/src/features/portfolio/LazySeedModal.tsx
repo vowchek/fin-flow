@@ -169,9 +169,14 @@ export function LazySeedModal({
             return
           }
         }
-        await portfoliosApi.seedLazyStock(
-          portfolioId,
-          stockRows.map((row) => ({
+        if (!investedAmount || Number(investedAmount) <= 0) {
+          setError('Укажите сумму вложений')
+          setPending(false)
+          return
+        }
+        await portfoliosApi.seedLazyStock(portfolioId, {
+          investedAmount: Number(investedAmount),
+          holdings: stockRows.map((row) => ({
             instrumentId: row.instrument.id,
             symbol: row.instrument.symbol,
             name: row.instrument.name,
@@ -179,7 +184,7 @@ export function LazySeedModal({
             occurredOn: row.occurredOn,
             unitPrice: Number(row.unitPrice),
           })),
-        )
+        })
       } else {
         if (!investedAmount || Number(investedAmount) <= 0) {
           setError('Укажите вложенную сумму')
@@ -229,38 +234,39 @@ export function LazySeedModal({
       <form className="stack seed-form" onSubmit={onSubmit}>
         <p className="muted seed-lead">
           {kind === 'stock'
-            ? 'Укажите активы, среднюю цену покупки и дату первой покупки — как в кабинете брокера. Дальше позиции можно будет докупать и продавать вручную.'
+            ? 'Укажите, сколько реально вложили денег, затем активы со средней ценой и датой — как в кабинете брокера. Дивиденды потом учитываются отдельно в прибыли.'
             : isExtend
               ? 'Добавьте активы или измените количества и сумму вложений. Средние цены входа пересчитаем по текущим долям рыночной стоимости — текущие ленивые позиции будут заменены.'
               : 'Укажите, сколько всего вложили и когда начали вести портфель, затем количества активов. Среднюю цену входа посчитаем по текущим долям стоимости.'}
         </p>
 
-        {kind === 'crypto' ? (
-          <div className="seed-meta">
+        <div className="seed-meta">
+          <div className="field">
+            <label htmlFor="invested">Вложено ({currency})</label>
+            <input
+              id="invested"
+              type="number"
+              step="any"
+              min="0"
+              required
+              value={investedAmount}
+              onChange={(e) => setInvestedAmount(e.target.value)}
+              placeholder={kind === 'stock' ? 'Сколько денег внесли' : undefined}
+            />
+          </div>
+          {kind === 'crypto' ? (
             <div className="field">
-              <label htmlFor="invested">Вложено ({currency})</label>
+              <label htmlFor="started">Дата начала учёта</label>
               <input
-                id="invested"
-                type="number"
-                step="any"
-                min="0"
-                required
-                value={investedAmount}
-                onChange={(e) => setInvestedAmount(e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="startedOn">Начало учёта</label>
-              <input
-                id="startedOn"
+                id="started"
                 type="date"
                 required
                 value={startedOn}
                 onChange={(e) => setStartedOn(e.target.value)}
               />
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         <div className="field">
           <label htmlFor="seed-search">Добавить актив</label>

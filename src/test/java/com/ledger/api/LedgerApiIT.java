@@ -49,7 +49,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new InstrumentUpsertRequest("SBER", "SBER", "Сбербанк", "RUB", true, null, null, null, null))))
+                                new InstrumentUpsertRequest("SBER", "SBER", "Сбербанк", "RUB", true, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID stockInstrumentId = UUID.fromString(objectMapper.readTree(stockInstrument.getResponse().getContentAsString())
@@ -59,7 +59,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new InstrumentUpsertRequest("BTC", "bitcoin", "Bitcoin", "USD", true, null, null, null, null))))
+                                new InstrumentUpsertRequest("BTC", "bitcoin", "Bitcoin", "USD", true, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID cryptoInstrumentId = UUID.fromString(objectMapper.readTree(cryptoInstrument.getResponse().getContentAsString())
@@ -68,7 +68,7 @@ class LedgerApiIT {
         MvcResult stockCreated = mvc.perform(post("/api/v1/stock-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Брокер", "ИИС", null))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Брокер", "ИИС", null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID stockId = UUID.fromString(objectMapper.readTree(stockCreated.getResponse().getContentAsString())
@@ -79,7 +79,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new HoldingCreateRequest(
-                                stockInstrumentId, null, null, new BigDecimal("10"), buyDate, null, null))))
+                                stockInstrumentId, null, null, new BigDecimal("10"), buyDate, null, null, null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.symbol", is("SBER")))
                 .andExpect(jsonPath("$.quantity").value(10))
@@ -93,7 +93,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new TradeRequest(new BigDecimal("2.5"), LocalDate.parse("2026-09-01"), null, null))))
+                                new TradeRequest(new BigDecimal("2.5"), LocalDate.parse("2026-09-01"), null, null, null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.quantity").value(12.5));
 
@@ -101,7 +101,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new TradeRequest(new BigDecimal("0.5"), LocalDate.parse("2026-09-02"), null, null))))
+                                new TradeRequest(new BigDecimal("0.5"), LocalDate.parse("2026-09-02"), null, null, null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.quantity").value(12));
 
@@ -109,7 +109,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new TradeRequest(new BigDecimal("100"), LocalDate.now(), null, null))))
+                                new TradeRequest(new BigDecimal("100"), LocalDate.now(), null, null, null))))
                 .andExpect(status().isBadRequest());
 
         mvc.perform(get("/api/v1/stock-portfolios/" + stockId + "/holdings/" + stockHoldingId + "/transactions")
@@ -122,7 +122,7 @@ class LedgerApiIT {
         MvcResult cryptoCreated = mvc.perform(post("/api/v1/crypto-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Cold", null, null))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Cold", null, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID cryptoId = UUID.fromString(objectMapper.readTree(cryptoCreated.getResponse().getContentAsString())
@@ -132,7 +132,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new HoldingCreateRequest(
-                                cryptoInstrumentId, null, null, new BigDecimal("0.01"), null, null, null))))
+                                cryptoInstrumentId, null, null, new BigDecimal("0.01"), null, null, null, null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.symbol", is("BTC")));
 
@@ -162,7 +162,7 @@ class LedgerApiIT {
         MvcResult created = mvc.perform(post("/api/v1/stock-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(alice))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Alice", null, null))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Alice", null, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID portfolioId = UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsString())
@@ -185,13 +185,13 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new InstrumentUpsertRequest("ETH", "ethereum", "Ethereum", "USD", true, null, null, null, null))))
+                                new InstrumentUpsertRequest("ETH", "ethereum", "Ethereum", "USD", true, null, null))))
                 .andExpect(status().isCreated());
 
         MvcResult created = mvc.perform(post("/api/v1/crypto-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Main", null, "LAZY"))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Main", null, "LAZY", null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID portfolioId = UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsString())
@@ -207,14 +207,14 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new HoldingCreateRequest(
-                                ethId, null, null, new BigDecimal("1"), null, null, null))))
+                                ethId, null, null, new BigDecimal("1"), null, null, null, null))))
                 .andExpect(status().isCreated());
 
         mvc.perform(post("/api/v1/crypto-portfolios/" + portfolioId + "/holdings")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new HoldingCreateRequest(
-                                ethId, null, null, new BigDecimal("2"), null, null, null))))
+                                ethId, null, null, new BigDecimal("2"), null, null, null, null))))
                 .andExpect(status().isConflict());
     }
 

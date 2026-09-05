@@ -257,7 +257,8 @@ public class CatalogService {
                 i.getAssetKind(),
                 i.getAnnualCashflowPerUnit(),
                 i.getCashflowGrowthPct(),
-                i.getCashflowUntilYear()
+                i.getCashflowUntilYear(),
+                i.isPaysDividends()
         );
     }
 
@@ -275,6 +276,7 @@ public class CatalogService {
                 null,
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -283,9 +285,9 @@ public class CatalogService {
         if (request.assetKind() != null) {
             entity.setAssetKind(request.assetKind());
         }
-        entity.setAnnualCashflowPerUnit(request.annualCashflowPerUnit());
-        entity.setCashflowGrowthPct(request.cashflowGrowthPct());
-        entity.setCashflowUntilYear(request.cashflowUntilYear());
+        if (request.paysDividends() != null) {
+            entity.setPaysDividends(request.paysDividends());
+        }
     }
 
     private static String normalizeExternal(AssetMarket market, String externalId) {

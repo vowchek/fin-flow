@@ -19,6 +19,8 @@ services:
     build: .
     ports:
       - "48121:48121"
+    env_file:
+      - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
       DB_HOST: postgres
@@ -28,6 +30,7 @@ services:
       DB_PASSWORD: ledger
       SERVER_PORT: 48121
       JWT_SECRET: docker-dev-only-change-me-use-32bytes+
+      TINVEST_TOKEN: ${TINVEST_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

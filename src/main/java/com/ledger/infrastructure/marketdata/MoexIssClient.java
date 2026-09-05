@@ -25,13 +25,16 @@ public class MoexIssClient implements MarketDataProvider {
     private static final Logger log = LoggerFactory.getLogger(MoexIssClient.class);
 
     private final RestClient client;
+    private final RestClient yahoo;
     private final String currency;
 
     public MoexIssClient(
             @Qualifier("moexRestClient") RestClient client,
+            @Qualifier("yahooRestClient") RestClient yahoo,
             MarketDataProperties properties
     ) {
         this.client = client;
+        this.yahoo = yahoo;
         this.currency = properties.getQuoteCurrency();
     }
 
@@ -100,6 +103,78 @@ public class MoexIssClient implements MarketDataProvider {
             log.warn("MOEX search failed for '{}': {}", query, ex.getMessage());
             return List.of();
         }
+    }
+
+    @Override
+    public Optional<InstrumentProfile> fetchInstrumentProfile(String externalId) {
+        if (externalId == null || externalId.isBlank()) {
+            return Optional.empty();
+        }
+        String secid = externalId.trim().toUpperCase(Locale.ROOT);
+        try {
+            JsonNode root = client.get()
+                    .uri(uri -> uri.path("/iss/securities/{secid}.json")
+                            .queryParam("iss.meta", "off")
+                            .queryParam("iss.only", "description")
+                            .build(secid))
+                    .retrieve()
+                    .body(JsonNode.class);
+            if (root == null) {
+                return Optional.empty();
+            }
+            JsonNode description = root.path("description");
+            int nameIdx = indexOf(description.path("columns"), "name");
+            int valueIdx = indexOf(description.path("columns"), "value");
+            String shortName = null;
+            String fullName = null;
+            String type = null;
+            String group = null;
+            String faceUnit = null;
+            for (JsonNode row : description.path("data")) {
+                if (!row.isArray()) {
+                    continue;
+                }
+                String field = textAt(row, nameIdx);
+                String value = textAt(row, valueIdx);
+                if (field == null || value == null || value.isBlank()) {
+                    continue;
+                }
+                if ("SHORTNAME".equalsIgnoreCase(field)) {
+                    shortName = value;
+                } else if ("NAME".equalsIgnoreCase(field) || "SECNAME".equalsIgnoreCase(field)) {
+                    fullName = value;
+                } else if ("TYPE".equalsIgnoreCase(field)) {
+                    type = value;
+                } else if ("GROUP".equalsIgnoreCase(field)) {
+                    group = value;
+                } else if ("FACEUNIT".equalsIgnoreCase(field) || "CURRENCYID".equalsIgnoreCase(field)) {
+                    faceUnit = value;
+                }
+            }
+            String name = shortName != null && !shortName.isBlank() ? shortName
+                    : (fullName != null && !fullName.isBlank() ? fullName : secid);
+            String assetKind = inferAssetKind(type, group);
+            String cur = faceUnit != null && !faceUnit.isBlank() ? faceUnit.toUpperCase(Locale.ROOT) : currency;
+            if (!"RUB".equals(cur) && !"USD".equals(cur) && !"SUR".equals(cur)) {
+                cur = currency;
+            }
+            if ("SUR".equals(cur)) {
+                cur = "RUB";
+            }
+            return Optional.of(new InstrumentProfile(secid, secid, name, cur, assetKind));
+        } catch (RestClientException ex) {
+            log.warn("MOEX profile failed for {}: {}", secid, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static String inferAssetKind(String type, String group) {
+        String hay = ((type == null ? "" : type) + " " + (group == null ? "" : group)).toLowerCase(Locale.ROOT);
+        if (hay.contains("bond") || hay.contains("облиг") || hay.contains("exchange_bond")
+                || hay.contains("corporate_bond") || hay.contains("ofz") || hay.contains("gov_bond")) {
+            return "BOND";
+        }
+        return "EQUITY";
     }
 
     @Override
@@ -313,6 +388,15 @@ public class MoexIssClient implements MarketDataProvider {
     }
 
     private List<CorporatePayment> fetchDividends(String secid) {
+        List<CorporatePayment> fromMoex = fetchDividendsFromMoex(secid);
+        if (!fromMoex.isEmpty()) {
+            return fromMoex;
+        }
+        // MOEX /dividends.json currently falls back to security description (no dividends table).
+        return fetchDividendsFromYahoo(secid);
+    }
+
+    private List<CorporatePayment> fetchDividendsFromMoex(String secid) {
         try {
             JsonNode root = client.get()
                     .uri(uri -> uri.path("/iss/securities/{secid}/dividends.json")
@@ -320,13 +404,17 @@ public class MoexIssClient implements MarketDataProvider {
                             .build(secid))
                     .retrieve()
                     .body(JsonNode.class);
-            if (root == null) {
+            if (root == null || !root.has("dividends")) {
+                log.debug("MOEX dividends table missing for {}", secid);
                 return List.of();
             }
             JsonNode table = root.path("dividends");
             int dateIdx = indexOf(table.path("columns"), "registryclosedate");
             int valueIdx = indexOf(table.path("columns"), "value");
             int currencyIdx = indexOf(table.path("columns"), "currencyid");
+            if (dateIdx < 0 || valueIdx < 0 || !table.path("data").isArray()) {
+                return List.of();
+            }
             List<CorporatePayment> out = new ArrayList<>();
             for (JsonNode row : table.path("data")) {
                 if (!row.isArray()) {
@@ -344,6 +432,76 @@ public class MoexIssClient implements MarketDataProvider {
         } catch (RestClientException ex) {
             log.warn("MOEX dividends failed for {}: {}", secid, ex.getMessage());
             return List.of();
+        }
+    }
+
+    /**
+     * Yahoo chart events for {@code SECID.ME} — used while MOEX ISS dividends endpoint is broken.
+     */
+    private List<CorporatePayment> fetchDividendsFromYahoo(String secid) {
+        String yahooSymbol = secid + ".ME";
+        long period2 = System.currentTimeMillis() / 1000L;
+        long period1 = period2 - (365L * 15L * 24L * 3600L);
+        try {
+            JsonNode root = yahoo.get()
+                    .uri(uri -> uri.path("/v8/finance/chart/{symbol}")
+                            .queryParam("interval", "1d")
+                            .queryParam("events", "div")
+                            .queryParam("period1", period1)
+                            .queryParam("period2", period2)
+                            .build(yahooSymbol))
+                    .retrieve()
+                    .body(JsonNode.class);
+            if (root == null) {
+                return List.of();
+            }
+            JsonNode dividends = root.path("chart").path("result");
+            if (!dividends.isArray() || dividends.isEmpty()) {
+                return List.of();
+            }
+            JsonNode events = dividends.get(0).path("events").path("dividends");
+            if (!events.isObject() || events.isEmpty()) {
+                log.debug("Yahoo dividends empty for {}", yahooSymbol);
+                return List.of();
+            }
+            List<CorporatePayment> out = new ArrayList<>();
+            var fields = events.fields();
+            while (fields.hasNext()) {
+                JsonNode node = fields.next().getValue();
+                BigDecimal amount = decimalNode(node.get("amount"));
+                long epoch = node.path("date").asLong(0);
+                if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0 || epoch <= 0) {
+                    continue;
+                }
+                LocalDate date = LocalDate.ofInstant(
+                        java.time.Instant.ofEpochSecond(epoch),
+                        java.time.ZoneOffset.UTC
+                );
+                out.add(new CorporatePayment(date, amount, currency, "DIVIDEND"));
+            }
+            log.info("Yahoo dividends for {}: {} rows", yahooSymbol, out.size());
+            return out;
+        } catch (RestClientException ex) {
+            log.warn("Yahoo dividends failed for {}: {}", yahooSymbol, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private static BigDecimal decimalNode(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.decimalValue();
+        }
+        String text = node.asText(null);
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(text);
+        } catch (NumberFormatException ex) {
+            return null;
         }
     }
 

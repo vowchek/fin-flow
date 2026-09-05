@@ -27,7 +27,7 @@ final class PortfolioMetrics {
     ) {
     }
 
-    static Totals of(List<HoldingResponse> holdings, String defaultCurrency) {
+    static Totals of(List<HoldingResponse> holdings, String defaultCurrency, BigDecimal investedAmount) {
         BigDecimal value = BigDecimal.ZERO;
         BigDecimal dayAbs = BigDecimal.ZERO;
         BigDecimal cost = BigDecimal.ZERO;
@@ -77,7 +77,12 @@ final class PortfolioMetrics {
         }
         BigDecimal totalAbs = null;
         BigDecimal totalPct = null;
-        if (anyProfit) {
+        // Portfolio P&L: market value − cash invested (same as detail «Прибыль»).
+        if (investedAmount != null && investedAmount.compareTo(BigDecimal.ZERO) > 0 && anyValue) {
+            totalAbs = value.subtract(investedAmount);
+            totalPct = totalAbs.divide(investedAmount, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+        } else if (anyProfit) {
+            // Fallback when invested is unset: asset price move + dividends/coupons.
             totalAbs = profit;
             if (anyCost && cost.compareTo(BigDecimal.ZERO) > 0) {
                 totalPct = totalAbs.divide(cost, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
@@ -101,10 +106,11 @@ final class PortfolioMetrics {
             int holdingsCount,
             List<HoldingResponse> holdings,
             String defaultCurrency,
+            BigDecimal investedAmount,
             Instant createdAt,
             Instant updatedAt
     ) {
-        Totals totals = of(holdings, defaultCurrency);
+        Totals totals = of(holdings, defaultCurrency, investedAmount);
         return new PortfolioSummaryResponse(
                 id,
                 name,
@@ -134,10 +140,11 @@ final class PortfolioMetrics {
             List<ValuePointResponse> valueHistory,
             String defaultCurrency,
             BigDecimal taxRatePercent,
+            BigDecimal investedAmount,
             Instant createdAt,
             Instant updatedAt
     ) {
-        Totals totals = of(holdings, defaultCurrency);
+        Totals totals = of(holdings, defaultCurrency, investedAmount);
         return new PortfolioDetailResponse(
                 id,
                 name,
@@ -152,6 +159,7 @@ final class PortfolioMetrics {
                 totals.totalChangePct(),
                 totals.currency(),
                 taxRatePercent,
+                investedAmount,
                 createdAt,
                 updatedAt
         );

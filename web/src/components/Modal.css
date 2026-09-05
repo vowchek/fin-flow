@@ -82,6 +82,70 @@
   display: none !important;
 }
 
+.adm-search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.adm-search-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.55rem;
+  align-items: baseline;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.adm-search-item:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ink) 28%, var(--line));
+}
+
+.adm-search-item:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.adm-pay-wrap {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.adm-pay-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.adm-pay-table th,
+.adm-pay-table td {
+  padding: 0.4rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.adm-pay-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  font-weight: 550;
+  color: var(--muted);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

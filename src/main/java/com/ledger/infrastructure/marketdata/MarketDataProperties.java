@@ -13,6 +13,7 @@ public class MarketDataProperties {
     private String cryptoQuoteCurrency = "USD";
     private final Moex moex = new Moex();
     private final CoinGecko coingecko = new CoinGecko();
+    private final Tinvest tinvest = new Tinvest();
 
     public Duration getQuoteTtl() {
         return quoteTtl;
@@ -50,6 +51,10 @@ public class MarketDataProperties {
         return coingecko;
     }
 
+    public Tinvest getTinvest() {
+        return tinvest;
+    }
+
     public static class Moex {
         private String baseUrl = "https://iss.moex.com";
 
@@ -71,6 +76,31 @@ public class MarketDataProperties {
 
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
+        }
+    }
+
+    public static class Tinvest {
+        private String token = "";
+        private String baseUrl = "https://invest-public-api.tinkoff.ru/rest";
+
+        public String getToken() {
+            return token;
+        }
+
+        public void setToken(String token) {
+            this.token = token;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public boolean isConfigured() {
+            return token != null && !token.isBlank();
         }
     }
 

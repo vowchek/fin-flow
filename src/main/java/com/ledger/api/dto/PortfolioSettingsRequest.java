@@ -13,6 +13,9 @@ public record PortfolioSettingsRequest(
         @NotNull
         @DecimalMin(value = "0", inclusive = true)
         @DecimalMax(value = "100", inclusive = true)
-        BigDecimal taxRatePercent
+        BigDecimal taxRatePercent,
+        @NotNull
+        @DecimalMin(value = "0", inclusive = true)
+        BigDecimal investedAmount
 ) {
 }

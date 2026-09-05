@@ -2,6 +2,7 @@ package com.ledger.application;
 
 import com.ledger.api.dto.CashMovementRequest;
 import com.ledger.api.dto.HoldingCreateRequest;
+import com.ledger.api.dto.HoldingDetailResponse;
 import com.ledger.api.dto.HoldingResponse;
 import com.ledger.api.dto.LazyCryptoSeedRequest;
 import com.ledger.api.dto.PortfolioDetailResponse;
@@ -133,6 +134,9 @@ public class CryptoPortfolioService {
         CryptoPortfolio portfolio = requireOwned(id);
         portfolio.setName(request.name().trim());
         portfolio.setDescription(Strings.trimToNull(request.description()));
+        if (request.investedAmount() != null) {
+            portfolio.setInvestedAmount(request.investedAmount());
+        }
         return toDetail(portfolio);
     }
 
@@ -166,7 +170,8 @@ public class CryptoPortfolioService {
                     item.quantity(),
                     request.startedOn(),
                     null,
-                    null
+                    null,
+                    false
             ));
             instruments.add(instrument);
             itemByInstrument.put(instrument.id(), item);
@@ -206,9 +211,11 @@ public class CryptoPortfolioService {
                     item.quantity(),
                     request.startedOn(),
                     unitPrice,
-                    "lazy-seed"
+                    "lazy-seed",
+                    false
             ));
         }
+        portfolio.setInvestedAmount(request.investedAmount());
         return toDetail(requireOwned(portfolioId));
     }
 
@@ -234,7 +241,9 @@ public class CryptoPortfolioService {
         } catch (DataIntegrityViolationException ex) {
             throw new ConflictException("Holding already exists for symbol: " + instrument.symbol());
         }
-        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, request.unitPrice(), request.note());
+        BigDecimal price = quotes.resolveTradePrice(instrument, occurredOn, request.unitPrice());
+        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, price, request.note());
+        addToInvestedIfNeeded(portfolio, request.quantity().multiply(price), request.addToInvested());
         return toHolding(holding);
     }
 
@@ -244,7 +253,9 @@ public class CryptoPortfolioService {
         rejectCashHolding(holding);
         CatalogItem instrument = catalog.requireBySymbol(MARKET, holding.getSymbol());
         LocalDate occurredOn = request.occurredOn() == null ? LocalDate.now() : request.occurredOn();
-        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, request.unitPrice(), request.note());
+        BigDecimal price = quotes.resolveTradePrice(instrument, occurredOn, request.unitPrice());
+        applyTrade(holding, instrument, TradeSide.BUY, request.quantity(), occurredOn, price, request.note());
+        addToInvestedIfNeeded(holding.getPortfolio(), request.quantity().multiply(price), request.addToInvested());
         return toHolding(holding);
     }
 
@@ -259,6 +270,14 @@ public class CryptoPortfolioService {
         }
         applyTrade(holding, instrument, TradeSide.SELL, request.quantity(), occurredOn, request.unitPrice(), request.note());
         return toHolding(holding);
+    }
+
+    /** Remove position and its trades without recording a sell (cash stays as-is). */
+    @Transactional
+    public void deleteHolding(UUID portfolioId, UUID holdingId) {
+        CryptoHolding holding = requireOwnedHolding(portfolioId, holdingId);
+        rejectCashHolding(holding);
+        holdings.delete(holding);
     }
 
     @Transactional
@@ -378,7 +397,9 @@ public class CryptoPortfolioService {
             BigDecimal unitPrice,
             String note
     ) {
-        BigDecimal price = quotes.resolveTradePrice(instrument, occurredOn, unitPrice);
+        BigDecimal price = unitPrice != null && unitPrice.compareTo(BigDecimal.ZERO) > 0
+                ? unitPrice
+                : quotes.resolveTradePrice(instrument, occurredOn, unitPrice);
         CryptoTransaction tx = new CryptoTransaction(
                 UUID.randomUUID(),
                 holding,
@@ -394,6 +415,65 @@ public class CryptoPortfolioService {
         } else {
             holding.setQuantity(holding.getQuantity().subtract(quantity));
         }
+    }
+
+    private void addToInvestedIfNeeded(CryptoPortfolio portfolio, BigDecimal spend, Boolean addToInvested) {
+        if (addToInvested != null && !addToInvested) {
+            return;
+        }
+        if (spend == null || spend.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        BigDecimal current = portfolio.getInvestedAmount() == null ? BigDecimal.ZERO : portfolio.getInvestedAmount();
+        portfolio.setInvestedAmount(current.add(spend));
+    }
+
+    @Transactional
+    public HoldingDetailResponse holdingDetail(UUID portfolioId, UUID holdingId) {
+        CryptoHolding holding = requireOwnedHolding(portfolioId, holdingId);
+        HoldingResponse valued = toHolding(holding, Map.of(), false);
+
+        List<ValuePointResponse> priceHistory = List.of();
+        if (!holding.isCash()) {
+            CatalogItem item = catalog.findBySymbol(MARKET, holding.getSymbol());
+            if (item != null) {
+                LocalDate to = LocalDate.now();
+                LocalDate from = to.minusYears(5);
+                quotes.ensureHistory(item, from, to);
+                priceHistory = quotes.priceSeries(item, from, to).entrySet().stream()
+                        .map(e -> new ValuePointResponse(e.getKey(), e.getValue(), null))
+                        .toList();
+            }
+        }
+
+        BigDecimal unitDayAbs = null;
+        if (valued.unitPrice() != null
+                && valued.dayChangeAbs() != null
+                && valued.quantity() != null
+                && valued.quantity().compareTo(BigDecimal.ZERO) != 0) {
+            unitDayAbs = valued.dayChangeAbs()
+                    .divide(valued.quantity(), 8, RoundingMode.HALF_UP)
+                    .setScale(4, RoundingMode.HALF_UP);
+        }
+
+        return new HoldingDetailResponse(
+                valued.id(),
+                valued.symbol(),
+                valued.name(),
+                valued.logoUrl(),
+                valued.cash(),
+                valued.quantity(),
+                valued.unitPrice(),
+                unitDayAbs,
+                valued.dayChangePct(),
+                valued.marketValue(),
+                valued.currency(),
+                priceHistory,
+                null,
+                null,
+                null,
+                null
+        );
     }
 
     private CryptoHolding requireOwnedHolding(UUID portfolioId, UUID holdingId) {
@@ -426,6 +506,7 @@ public class CryptoPortfolioService {
                 (int) active,
                 holdingResponses,
                 marketDataProperties.quoteCurrency(MARKET),
+                portfolio.getInvestedAmount(),
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );
@@ -443,6 +524,7 @@ public class CryptoPortfolioService {
                 List.of(),
                 marketDataProperties.quoteCurrency(MARKET),
                 null,
+                portfolio.getInvestedAmount(),
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );
@@ -497,8 +579,11 @@ public class CryptoPortfolioService {
                 null,
                 null,
                 null,
+                null,
                 holding.getCreatedAt(),
-                holding.getUpdatedAt()
+                holding.getUpdatedAt(),
+                null,
+                null
         );
         java.util.Optional<QuoteService.LiveQuote> liveOverride = null;
         if (usePrefetchedQuotes && !holding.isCash()) {

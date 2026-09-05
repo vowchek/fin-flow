@@ -38,6 +38,28 @@ public class MarketDataConfig {
         return restClient("https://query1.finance.yahoo.com");
     }
 
+    @Bean(name = "tinvestRestClient")
+    @Profile("!test")
+    RestClient tinvestRestClient(MarketDataProperties properties) throws Exception {
+        var tinvest = properties.getTinvest();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+                java.net.http.HttpClient.newBuilder()
+                        .sslContext(RussianTrustedSsl.create())
+                        .connectTimeout(Duration.ofSeconds(10))
+                        .build()
+        );
+        factory.setReadTimeout(Duration.ofSeconds(30));
+        RestClient.Builder builder = RestClient.builder()
+                .baseUrl(tinvest.getBaseUrl())
+                .requestFactory(factory)
+                .defaultHeader("User-Agent", "fin-flow/0.1")
+                .defaultHeader("x-app-name", "fin-flow");
+        if (tinvest.isConfigured()) {
+            builder.defaultHeader("Authorization", "Bearer " + tinvest.getToken().trim());
+        }
+        return builder.build();
+    }
+
     @Bean
     @Profile("test")
     MarketDataProvider stubMoexProvider() {
@@ -80,6 +102,27 @@ public class MarketDataConfig {
             String name = market == AssetMarket.CRYPTO ? "Stub Coin " + q : "Stub Share " + q;
             String external = market == AssetMarket.CRYPTO ? q.toLowerCase(Locale.ROOT) : q;
             return List.of(new RemoteInstrument(q, external, name, null, currency));
+        }
+
+        @Override
+        public Optional<InstrumentProfile> fetchInstrumentProfile(String externalId) {
+            String id = externalId.trim();
+            String symbol = market == AssetMarket.CRYPTO ? id.toUpperCase(Locale.ROOT) : id.toUpperCase(Locale.ROOT);
+            String external = market == AssetMarket.CRYPTO ? id.toLowerCase(Locale.ROOT) : id.toUpperCase(Locale.ROOT);
+            String name = market == AssetMarket.CRYPTO ? "Stub Coin " + symbol : "Stub Share " + symbol;
+            return Optional.of(new InstrumentProfile(symbol, external, name, currency, "EQUITY"));
+        }
+
+        @Override
+        public List<CorporatePayment> fetchCorporatePayments(String externalId) {
+            if (market != AssetMarket.MOEX) {
+                return List.of();
+            }
+            LocalDate today = LocalDate.now();
+            return List.of(
+                    new CorporatePayment(today.minusMonths(6), new BigDecimal("12.50"), currency, "DIVIDEND"),
+                    new CorporatePayment(today.minusMonths(18), new BigDecimal("10.00"), currency, "DIVIDEND")
+            );
         }
 
         @Override

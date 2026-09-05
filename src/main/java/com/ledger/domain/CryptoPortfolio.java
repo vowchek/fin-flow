@@ -15,6 +15,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +41,9 @@ public class CryptoPortfolio {
     @Enumerated(EnumType.STRING)
     @Column(name = "entry_mode", nullable = false, length = 32)
     private PortfolioEntryMode entryMode = PortfolioEntryMode.MANUAL;
+
+    @Column(name = "invested_amount", precision = 28, scale = 8)
+    private BigDecimal investedAmount;
 
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("symbol ASC")
@@ -107,6 +111,14 @@ public class CryptoPortfolio {
 
     public void setEntryMode(PortfolioEntryMode entryMode) {
         this.entryMode = entryMode == null ? PortfolioEntryMode.MANUAL : entryMode;
+    }
+
+    public BigDecimal getInvestedAmount() {
+        return investedAmount;
+    }
+
+    public void setInvestedAmount(BigDecimal investedAmount) {
+        this.investedAmount = investedAmount;
     }
 
     public List<CryptoHolding> getHoldings() {

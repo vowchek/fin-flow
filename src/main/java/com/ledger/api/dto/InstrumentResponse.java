@@ -17,6 +17,7 @@ public record InstrumentResponse(
         AssetKind assetKind,
         BigDecimal annualCashflowPerUnit,
         BigDecimal cashflowGrowthPct,
-        Integer cashflowUntilYear
+        Integer cashflowUntilYear,
+        Boolean paysDividends
 ) {
 }

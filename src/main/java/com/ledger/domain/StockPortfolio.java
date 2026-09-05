@@ -45,6 +45,10 @@ public class StockPortfolio {
     @Column(name = "tax_rate_percent", nullable = false, precision = 8, scale = 4)
     private BigDecimal taxRatePercent = new BigDecimal("13");
 
+    /** Manual cash invested (portfolio metric). Not derived from holdings or dividends. */
+    @Column(name = "invested_amount", precision = 28, scale = 8)
+    private BigDecimal investedAmount;
+
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("symbol ASC")
     private List<StockHolding> holdings = new ArrayList<>();
@@ -122,6 +126,14 @@ public class StockPortfolio {
 
     public void setTaxRatePercent(BigDecimal taxRatePercent) {
         this.taxRatePercent = taxRatePercent == null ? new BigDecimal("13") : taxRatePercent;
+    }
+
+    public BigDecimal getInvestedAmount() {
+        return investedAmount;
+    }
+
+    public void setInvestedAmount(BigDecimal investedAmount) {
+        this.investedAmount = investedAmount;
     }
 
     public List<StockHolding> getHoldings() {

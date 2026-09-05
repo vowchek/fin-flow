@@ -21,6 +21,7 @@ public record PortfolioDetailResponse(
         BigDecimal totalChangePct,
         String currency,
         BigDecimal taxRatePercent,
+        BigDecimal investedAmount,
         Instant createdAt,
         Instant updatedAt
 ) {
