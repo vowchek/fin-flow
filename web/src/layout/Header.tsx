@@ -1,12 +1,13 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { PortfolioKindIcon } from '../components/PortfolioKindIcon'
 import { useTheme } from '../theme/ThemeContext'
 import './Header.css'
 
 const nav = [
-  { to: '/stocks', label: 'Фонд' },
-  { to: '/crypto', label: 'Крипта' },
-  { to: '/expenses', label: 'Траты' },
+  { to: '/stocks', label: 'Фондовые портфели', kind: 'stock' as const },
+  { to: '/crypto', label: 'Криптопортфели', kind: 'crypto' as const },
+  { to: '/expenses', label: 'Учёт трат', kind: null },
 ]
 
 export function Header() {
@@ -33,6 +34,7 @@ export function Header() {
               to={item.to}
               className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
             >
+              {item.kind ? <PortfolioKindIcon kind={item.kind} size={16} className="nav-kind-icon" /> : null}
               {item.label}
             </NavLink>
           ))}

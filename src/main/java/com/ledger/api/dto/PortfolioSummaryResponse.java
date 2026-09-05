@@ -1,5 +1,7 @@
 package com.ledger.api.dto;
 
+import com.ledger.domain.PortfolioEntryMode;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -9,6 +11,7 @@ public record PortfolioSummaryResponse(
         UUID id,
         String name,
         String description,
+        PortfolioEntryMode entryMode,
         int holdingsCount,
         List<HoldingResponse> holdings,
         BigDecimal totalValue,

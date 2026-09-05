@@ -11,4 +11,6 @@ public interface CryptoHoldingRepository extends JpaRepository<CryptoHolding, UU
     boolean existsByPortfolioIdAndSymbol(UUID portfolioId, String symbol);
 
     Optional<CryptoHolding> findByIdAndPortfolioId(UUID id, UUID portfolioId);
+
+    Optional<CryptoHolding> findByPortfolioIdAndCashTrue(UUID portfolioId);
 }

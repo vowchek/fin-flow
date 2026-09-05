@@ -35,6 +35,9 @@ public class CryptoHolding implements Persistable<UUID> {
     @Column(nullable = false, precision = 28, scale = 8)
     private BigDecimal quantity;
 
+    @Column(nullable = false)
+    private boolean cash;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -45,11 +48,23 @@ public class CryptoHolding implements Persistable<UUID> {
     }
 
     public CryptoHolding(UUID id, CryptoPortfolio portfolio, String symbol, String name, BigDecimal quantity) {
+        this(id, portfolio, symbol, name, quantity, false);
+    }
+
+    public CryptoHolding(
+            UUID id,
+            CryptoPortfolio portfolio,
+            String symbol,
+            String name,
+            BigDecimal quantity,
+            boolean cash
+    ) {
         this.id = id;
         this.portfolio = portfolio;
         this.symbol = symbol;
         this.name = name;
         this.quantity = quantity;
+        this.cash = cash;
     }
 
     @PrePersist
@@ -90,6 +105,10 @@ public class CryptoHolding implements Persistable<UUID> {
 
     public void setQuantity(BigDecimal quantity) {
         this.quantity = quantity;
+    }
+
+    public boolean isCash() {
+        return cash;
     }
 
     public Instant getCreatedAt() {

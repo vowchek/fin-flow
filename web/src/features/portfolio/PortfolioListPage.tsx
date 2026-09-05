@@ -1,11 +1,14 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import * as portfoliosApi from '../../api/portfolios'
 import type { Holding, PortfolioKind, PortfolioSummary } from '../../api/types'
-import { Modal } from '../../components/Modal'
+import { MarketStrip } from '../../components/MarketStrip'
+import { AssetTickerStrip } from '../../components/AssetTickerStrip'
 import { PortfolioChart } from '../../components/PortfolioChart'
+import { PortfolioKindIcon } from '../../components/PortfolioKindIcon'
 import { changeClass, formatMoney, formatPct } from '../../lib/format'
+import { CreatePortfolioWizard } from './CreatePortfolioWizard'
 
 type Props = {
   kind: PortfolioKind
@@ -13,12 +16,24 @@ type Props = {
   basePath: string
 }
 
-const MAX_TICKERS = 5
-
 function topHoldings(holdings: Holding[]) {
   return [...holdings]
     .filter((h) => Number(h.quantity) > 0)
-    .sort((a, b) => Number(b.marketValue ?? b.quantity) - Number(a.marketValue ?? a.quantity))
+    .sort((a, b) => {
+      if (Boolean(a.cash) !== Boolean(b.cash)) return a.cash ? 1 : -1
+      return Number(b.marketValue ?? b.quantity) - Number(a.marketValue ?? a.quantity)
+    })
+}
+
+function dayMovers(holdings: Holding[]) {
+  const ranked = holdings
+    .filter((h) => !h.cash && Number(h.quantity) > 0 && h.dayChangePct != null && Number.isFinite(Number(h.dayChangePct)))
+    .sort((a, b) => Number(b.dayChangePct) - Number(a.dayChangePct))
+  if (ranked.length === 0) return { best: null, worst: null }
+  const best = ranked[0]
+  const worst = ranked[ranked.length - 1]
+  if (best.id === worst.id) return { best, worst: null }
+  return { best, worst }
 }
 
 export function PortfolioListPage({ kind, title, basePath }: Props) {
@@ -26,9 +41,6 @@ export function PortfolioListPage({ kind, title, basePath }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [saving, setSaving] = useState(false)
 
   async function reload() {
     setLoading(true)
@@ -46,110 +58,99 @@ export function PortfolioListPage({ kind, title, basePath }: Props) {
     void reload()
   }, [kind])
 
-  async function onCreate(e: FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
-    try {
-      await portfoliosApi.createPortfolio(kind, name, description || undefined)
-      setName('')
-      setDescription('')
-      setCreateOpen(false)
-      await reload()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось создать')
-    } finally {
-      setSaving(false)
-    }
-  }
+  const currency = kind === 'crypto' ? 'USD' : 'RUB'
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">{title}</h1>
-          <p className="page-lead">Стоимость, прибыль и состав. Нажмите на название, чтобы открыть.</p>
+          <h1 className="page-title page-title-with-icon">
+            <span className="page-kind-icon" aria-hidden>
+              <PortfolioKindIcon kind={kind} size={28} />
+            </span>
+            {title}
+          </h1>
         </div>
         <button type="button" className="btn" onClick={() => setCreateOpen(true)}>
           Новый портфель
         </button>
       </div>
 
-      {error && !createOpen && <p className="error">{error}</p>}
+      <MarketStrip kind={kind} />
+
+      {error && !createOpen ? <p className="error">{error}</p> : null}
 
       {loading ? (
         <div className="panel empty">Загрузка…</div>
       ) : items.length === 0 ? (
-        <div className="panel empty">Пока нет портфелей — создайте первый</div>
+        <div className="panel empty">Пока нет портфелей — создайте первый.</div>
       ) : (
         <div className="portfolio-grid">
           {items.map((item) => {
-            const currency = item.currency || (kind === 'crypto' ? 'USD' : 'RUB')
+            const itemCurrency = item.currency || currency
             const ranked = topHoldings(item.holdings ?? [])
-            const shown = ranked.slice(0, MAX_TICKERS)
-            const more = ranked.length - shown.length
+            const tickerSymbols = ranked.filter((h) => !h.cash).map((h) => h.symbol)
+            const { best, worst } = dayMovers(item.holdings ?? [])
             return (
               <article key={item.id} className="pf-card">
-                <div className="pf-card-main">
-                  <Link to={`${basePath}/${item.id}`} className="pf-card-title">
-                    {item.name}
-                  </Link>
-                  {item.description ? <p className="pf-card-desc">{item.description}</p> : null}
+                <Link to={`${basePath}/${item.id}`} className="pf-card-link" aria-label={item.name} />
+                <div className="pf-card-body">
+                  <div className="pf-card-main">
+                    <h2 className="pf-card-title">{item.name}</h2>
+                    {item.description ? <p className="pf-card-desc">{item.description}</p> : null}
 
-                  <p className="pf-card-value">{formatMoney(item.totalValue, currency)}</p>
-                  <p className={`pf-card-pnl ${changeClass(item.totalChangeAbs)}`}>
-                    {formatMoney(item.totalChangeAbs, currency)}
-                    <span>{formatPct(item.totalChangePct)}</span>
-                  </p>
-                  <p className={`pf-card-day ${changeClass(item.dayChangeAbs)}`}>
-                    за день {formatMoney(item.dayChangeAbs, currency)} {formatPct(item.dayChangePct)}
-                  </p>
+                    <div className="pf-card-metrics">
+                      <p className="pf-card-value">{formatMoney(item.totalValue, itemCurrency)}</p>
+                      <p className={`pf-card-chg ${changeClass(item.totalChangeAbs)}`}>
+                        <span className="pf-card-chg-label">за период</span>
+                        <span className="pf-card-chg-abs">{formatMoney(item.totalChangeAbs, itemCurrency)}</span>
+                        <span className="pf-card-chg-pct">{formatPct(item.totalChangePct)}</span>
+                      </p>
+                      <p className={`pf-card-chg ${changeClass(item.dayChangeAbs)}`}>
+                        <span className="pf-card-chg-label">за день</span>
+                        <span className="pf-card-chg-abs">{formatMoney(item.dayChangeAbs, itemCurrency)}</span>
+                        <span className="pf-card-chg-pct">{formatPct(item.dayChangePct)}</span>
+                      </p>
+                    </div>
 
-                  <div className="pf-card-tickers">
-                    {shown.length === 0 ? (
-                      <span className="muted">Нет позиций</span>
-                    ) : (
-                      <>
-                        {shown.map((h) => (
-                          <span key={h.id} className="pf-ticker">
-                            {h.symbol}
-                          </span>
-                        ))}
-                        {more > 0 ? <span className="pf-ticker more">+{more}</span> : null}
-                      </>
-                    )}
+                    {best || worst ? (
+                      <div className="pf-card-movers">
+                        {best ? (
+                          <div className={`pf-mover ${changeClass(best.dayChangePct)}`}>
+                            <span className="pf-mover-label">лучш.</span>
+                            <span className="pf-mover-sym">{best.symbol}</span>
+                            <span className="pf-mover-pct">{formatPct(best.dayChangePct)}</span>
+                          </div>
+                        ) : null}
+                        {worst ? (
+                          <div className={`pf-mover ${changeClass(worst.dayChangePct)}`}>
+                            <span className="pf-mover-label">худш.</span>
+                            <span className="pf-mover-sym">{worst.symbol}</span>
+                            <span className="pf-mover-pct">{formatPct(worst.dayChangePct)}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="pf-card-chart">
+                    <PortfolioChart holdings={ranked} compact />
                   </div>
                 </div>
-                <div className="pf-card-chart">
-                  <PortfolioChart holdings={ranked} compact />
-                </div>
+
+                <AssetTickerStrip symbols={tickerSymbols} />
               </article>
             )
           })}
         </div>
       )}
 
-      <Modal open={createOpen} title="Новый портфель" onClose={() => !saving && setCreateOpen(false)}>
-        <form className="stack" onSubmit={onCreate}>
-          <div className="field">
-            <label htmlFor="pf-name">Название</label>
-            <input id="pf-name" required autoFocus value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="pf-desc">Описание</label>
-            <input id="pf-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-          {error && createOpen && <p className="error">{error}</p>}
-          <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" disabled={saving} onClick={() => setCreateOpen(false)}>
-              Отмена
-            </button>
-            <button type="submit" className="btn" disabled={saving}>
-              {saving ? 'Создаём…' : 'Создать'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      <CreatePortfolioWizard
+        open={createOpen}
+        kind={kind}
+        basePath={basePath}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => void reload()}
+      />
     </div>
   )
 }

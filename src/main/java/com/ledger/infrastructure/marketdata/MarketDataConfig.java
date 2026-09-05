@@ -11,6 +11,7 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -29,6 +30,12 @@ public class MarketDataConfig {
     @Profile("!test")
     RestClient coinGeckoRestClient(MarketDataProperties properties) {
         return restClient(properties.getCoingecko().getBaseUrl());
+    }
+
+    @Bean(name = "yahooRestClient")
+    @Profile("!test")
+    RestClient yahooRestClient() {
+        return restClient("https://query1.finance.yahoo.com");
     }
 
     @Bean
@@ -87,6 +94,18 @@ public class MarketDataConfig {
         @Override
         public Optional<BigDecimal> fetchHistorical(String externalId, LocalDate date) {
             return Optional.of(new BigDecimal("90.00"));
+        }
+
+        @Override
+        public List<HistoricalPrice> fetchHistoricalRange(String externalId, LocalDate from, LocalDate to) {
+            if (from == null || to == null || from.isAfter(to)) {
+                return List.of();
+            }
+            List<HistoricalPrice> out = new ArrayList<>();
+            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+                out.add(new HistoricalPrice(d, new BigDecimal("90.00")));
+            }
+            return out;
         }
     }
 }

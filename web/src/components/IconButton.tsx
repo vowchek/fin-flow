@@ -51,6 +51,14 @@ export function PlusIcon() {
   )
 }
 
+export function MinusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function BuyIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -74,31 +82,6 @@ export function HistoryIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
       <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.7" />
       <path d="M12 8v4.5L15 15" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-export function ValueIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="6" width="18" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M3 10h18" stroke="currentColor" strokeWidth="1.7" />
-      <circle cx="16.5" cy="14.5" r="1.4" fill="currentColor" />
-    </svg>
-  )
-}
-
-export function ProfitIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 16l5-5 3.5 3.5L20 7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M15 7h5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -139,6 +122,33 @@ export function EyeOffIcon() {
         strokeWidth="1.7"
         strokeLinecap="round"
       />
+    </svg>
+  )
+}
+
+export function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M19.4 13.5v-3l-1.8-.5a6.7 6.7 0 0 0-.6-1.4l1-1.6-2.1-2.1-1.6 1a6.7 6.7 0 0 0-1.4-.6L12 2.6h-3l-.5 1.8c-.5.2-1 .4-1.4.6l-1.6-1-2.1 2.1 1 1.6c-.2.4-.4.9-.6 1.4L2.6 10.5v3l1.8.5c.2.5.4 1 .6 1.4l-1 1.6 2.1 2.1 1.6-1c.4.2.9.4 1.4.6l.5 1.8h3l.5-1.8c.5-.2 1-.4 1.4-.6l1.6 1 2.1-2.1-1-1.6c.2-.4.4-.9.6-1.4l1.8-.5z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+export function CashflowIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 7h16M4 12h10M4 17h13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M17 10.5v7M14.5 15.5L17 18l2.5-2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

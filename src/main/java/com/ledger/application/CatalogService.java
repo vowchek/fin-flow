@@ -110,6 +110,7 @@ public class CatalogService {
                 case MOEX -> {
                     StockInstrument entity = new StockInstrument(UUID.randomUUID(), symbol, externalId, name, currency);
                     entity.setEnabled(enabled);
+                    applyStockCashflow(entity, request);
                     yield toStockResponse(stocks.save(entity));
                 }
                 case CRYPTO -> {
@@ -141,6 +142,7 @@ public class CatalogService {
                     if (request.enabled() != null) {
                         entity.setEnabled(request.enabled());
                     }
+                    applyStockCashflow(entity, request);
                     yield toStockResponse(entity);
                 }
                 case CRYPTO -> {
@@ -251,7 +253,11 @@ public class CatalogService {
                 item.name(),
                 item.logoUrl(),
                 item.currency(),
-                item.enabled()
+                item.enabled(),
+                i.getAssetKind(),
+                i.getAnnualCashflowPerUnit(),
+                i.getCashflowGrowthPct(),
+                i.getCashflowUntilYear()
         );
     }
 
@@ -265,8 +271,21 @@ public class CatalogService {
                 item.name(),
                 item.logoUrl(),
                 item.currency(),
-                item.enabled()
+                item.enabled(),
+                null,
+                null,
+                null,
+                null
         );
+    }
+
+    private static void applyStockCashflow(StockInstrument entity, InstrumentUpsertRequest request) {
+        if (request.assetKind() != null) {
+            entity.setAssetKind(request.assetKind());
+        }
+        entity.setAnnualCashflowPerUnit(request.annualCashflowPerUnit());
+        entity.setCashflowGrowthPct(request.cashflowGrowthPct());
+        entity.setCashflowUntilYear(request.cashflowUntilYear());
     }
 
     private static String normalizeExternal(AssetMarket market, String externalId) {

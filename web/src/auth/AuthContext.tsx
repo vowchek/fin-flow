@@ -45,6 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (!cancelled) {
+        setUser(null)
+        setToken(null)
+        persist(null, null)
+        setLoading(false)
+      }
+    }, 8000)
+
     authApi
       .me()
       .then((me) => {
@@ -61,10 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .finally(() => {
+        window.clearTimeout(timer)
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [token])
 

@@ -1,5 +1,8 @@
 package com.ledger.api.dto;
 
+import com.ledger.domain.AssetKind;
+
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record InstrumentResponse(
@@ -10,6 +13,10 @@ public record InstrumentResponse(
         String name,
         String logoUrl,
         String currency,
-        boolean enabled
+        boolean enabled,
+        AssetKind assetKind,
+        BigDecimal annualCashflowPerUnit,
+        BigDecimal cashflowGrowthPct,
+        Integer cashflowUntilYear
 ) {
 }

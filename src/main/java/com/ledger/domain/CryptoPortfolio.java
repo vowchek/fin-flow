@@ -3,6 +3,8 @@ package com.ledger.domain;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -35,6 +37,10 @@ public class CryptoPortfolio {
     @Column(length = 1000)
     private String description;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entry_mode", nullable = false, length = 32)
+    private PortfolioEntryMode entryMode = PortfolioEntryMode.MANUAL;
+
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("symbol ASC")
     private List<CryptoHolding> holdings = new ArrayList<>();
@@ -48,11 +54,12 @@ public class CryptoPortfolio {
     protected CryptoPortfolio() {
     }
 
-    public CryptoPortfolio(UUID id, AppUser owner, String name, String description) {
+    public CryptoPortfolio(UUID id, AppUser owner, String name, String description, PortfolioEntryMode entryMode) {
         this.id = id;
         this.owner = owner;
         this.name = name;
         this.description = description;
+        this.entryMode = entryMode == null ? PortfolioEntryMode.MANUAL : entryMode;
     }
 
     @PrePersist
@@ -60,6 +67,9 @@ public class CryptoPortfolio {
         Instant now = Instant.now();
         createdAt = now;
         updatedAt = now;
+        if (entryMode == null) {
+            entryMode = PortfolioEntryMode.MANUAL;
+        }
     }
 
     @PreUpdate
@@ -89,6 +99,14 @@ public class CryptoPortfolio {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public PortfolioEntryMode getEntryMode() {
+        return entryMode;
+    }
+
+    public void setEntryMode(PortfolioEntryMode entryMode) {
+        this.entryMode = entryMode == null ? PortfolioEntryMode.MANUAL : entryMode;
     }
 
     public List<CryptoHolding> getHoldings() {

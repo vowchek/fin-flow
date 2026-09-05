@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import './HomePage.css'
 
@@ -15,32 +14,28 @@ export function HomePage() {
           Личное пространство для капитала и быта: фондовые и криптопортфели рядом с месячными тратами —
           чтобы видеть картину целиком, а не собирать её по таблицам.
         </p>
-        <div className="row home-cta">
-          <Link className="btn" to="/stocks">
-            Фондовые портфели
-          </Link>
-          <Link className="btn btn-ghost" to="/crypto">
-            Крипта
-          </Link>
-          <Link className="btn btn-ghost" to="/expenses">
-            Траты
-          </Link>
-        </div>
       </section>
 
-      <section className="home-points" aria-label="Возможности">
-        <article className="home-point">
-          <h2>Фонд</h2>
-          <p>Собирайте портфели акций и ETF, следите за составом и обновляйте позиции без лишних шагов.</p>
-        </article>
-        <article className="home-point">
-          <h2>Крипта</h2>
-          <p>Отдельный контур под цифровые активы — та же ясность, своя специфика и дальнейший рост.</p>
-        </article>
-        <article className="home-point">
-          <h2>Траты</h2>
-          <p>Фиксируйте расходы по месяцам и категориям, чтобы динамика была видна, а не терялась в памяти.</p>
-        </article>
+      <section className="home-overview" aria-label="Обзор">
+        <h2 className="home-section-title">Как это устроено</h2>
+        <p className="home-overview-text">
+          Разделы в шапке ведут к портфелям и учёту расходов. На главной — только общая картина: что хранится
+          в сервисе и какие действия обычно делают после входа.
+        </p>
+        <ul className="home-actions">
+          <li>
+            <strong>Портфели</strong>
+            <span>Создают один или несколько портфелей, добавляют позиции и обновляют количество после покупок и продаж.</span>
+          </li>
+          <li>
+            <strong>Стоимость и прибыль</strong>
+            <span>Смотрят текущую оценку, вложенную сумму и изменение — по портфелю целиком и по каждой позиции.</span>
+          </li>
+          <li>
+            <strong>Траты</strong>
+            <span>Фиксируют расходы по месяцам и категориям, чтобы видеть, куда уходит бюджет рядом с капиталом.</span>
+          </li>
+        </ul>
       </section>
     </div>
   )

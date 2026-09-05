@@ -60,10 +60,20 @@
 }
 
 .nav-link {
-  padding: 0.45rem 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
   border-radius: 999px;
   color: var(--muted);
+  white-space: nowrap;
+  font-size: 0.95rem;
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-kind-icon {
+  flex: 0 0 auto;
+  opacity: 0.9;
 }
 
 .nav-link:hover {
@@ -94,7 +104,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 960px) {
   .header-inner {
     grid-template-columns: 1fr auto;
     grid-template-areas:

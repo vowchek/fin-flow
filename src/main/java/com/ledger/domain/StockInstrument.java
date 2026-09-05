@@ -2,12 +2,15 @@ package com.ledger.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import org.springframework.data.domain.Persistable;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -36,6 +39,19 @@ public class StockInstrument implements Persistable<UUID> {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "asset_kind", nullable = false, length = 16)
+    private AssetKind assetKind = AssetKind.EQUITY;
+
+    @Column(name = "annual_cashflow_per_unit", precision = 28, scale = 8)
+    private BigDecimal annualCashflowPerUnit;
+
+    @Column(name = "cashflow_growth_pct", precision = 12, scale = 6)
+    private BigDecimal cashflowGrowthPct;
+
+    @Column(name = "cashflow_until_year")
+    private Integer cashflowUntilYear;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -52,6 +68,7 @@ public class StockInstrument implements Persistable<UUID> {
         this.name = name;
         this.currency = currency;
         this.enabled = true;
+        this.assetKind = AssetKind.EQUITY;
     }
 
     @PrePersist
@@ -59,6 +76,9 @@ public class StockInstrument implements Persistable<UUID> {
         Instant now = Instant.now();
         createdAt = now;
         updatedAt = now;
+        if (assetKind == null) {
+            assetKind = AssetKind.EQUITY;
+        }
     }
 
     @PreUpdate
@@ -122,6 +142,38 @@ public class StockInstrument implements Persistable<UUID> {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public AssetKind getAssetKind() {
+        return assetKind == null ? AssetKind.EQUITY : assetKind;
+    }
+
+    public void setAssetKind(AssetKind assetKind) {
+        this.assetKind = assetKind == null ? AssetKind.EQUITY : assetKind;
+    }
+
+    public BigDecimal getAnnualCashflowPerUnit() {
+        return annualCashflowPerUnit;
+    }
+
+    public void setAnnualCashflowPerUnit(BigDecimal annualCashflowPerUnit) {
+        this.annualCashflowPerUnit = annualCashflowPerUnit;
+    }
+
+    public BigDecimal getCashflowGrowthPct() {
+        return cashflowGrowthPct;
+    }
+
+    public void setCashflowGrowthPct(BigDecimal cashflowGrowthPct) {
+        this.cashflowGrowthPct = cashflowGrowthPct;
+    }
+
+    public Integer getCashflowUntilYear() {
+        return cashflowUntilYear;
+    }
+
+    public void setCashflowUntilYear(Integer cashflowUntilYear) {
+        this.cashflowUntilYear = cashflowUntilYear;
     }
 
     public Instant getCreatedAt() {

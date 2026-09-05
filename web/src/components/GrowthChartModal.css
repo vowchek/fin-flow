@@ -1,0 +1,70 @@
+.growth-modal {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.growth-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+}
+
+.growth-summary > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.growth-summary-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.growth-summary strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.growth-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.growth-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.growth-legend-item::before {
+  content: '';
+  width: 0.85rem;
+  height: 0.2rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.growth-legend-item.value {
+  color: var(--accent);
+}
+
+.growth-legend-item.invested::before {
+  background: transparent;
+  border-top: 2px dashed var(--muted);
+  height: 0;
+  width: 0.95rem;
+}
+
+.growth-legend-item.peak::before {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--gain);
+}
+
+.growth-chart {
+  width: 100%;
+  min-height: 300px;
+}

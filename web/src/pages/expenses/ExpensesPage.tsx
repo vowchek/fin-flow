@@ -74,7 +74,7 @@ export function ExpensesPage() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Траты</h1>
+      <h1 className="page-title">Учёт трат</h1>
       <p className="page-lead">Записи по месяцам. Период задаётся в формате YYYY-MM.</p>
 
       <div className="panel row" style={{ marginBottom: '1rem' }}>

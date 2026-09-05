@@ -4,6 +4,7 @@ import * as instrumentsApi from '../../api/instruments'
 import type { Instrument, PortfolioKind } from '../../api/types'
 import { AssetLogo } from '../../components/AssetLogo'
 import { Modal } from '../../components/Modal'
+import { formatMoney } from '../../lib/format'
 
 type Draft = {
   symbol: string
@@ -11,7 +12,13 @@ type Draft = {
   name: string
   currency: string
   enabled: boolean
+  assetKind: 'EQUITY' | 'BOND'
+  annualCashflowPerUnit: string
+  cashflowGrowthPct: string
+  cashflowUntilYear: string
 }
+
+type FormTab = 'main' | 'cashflow'
 
 const emptyDraft = (kind: PortfolioKind): Draft => ({
   symbol: '',
@@ -19,6 +26,10 @@ const emptyDraft = (kind: PortfolioKind): Draft => ({
   name: '',
   currency: kind === 'crypto' ? 'USD' : 'RUB',
   enabled: true,
+  assetKind: 'EQUITY',
+  annualCashflowPerUnit: '',
+  cashflowGrowthPct: '',
+  cashflowUntilYear: '',
 })
 
 export function AdminCatalogPage() {
@@ -31,6 +42,7 @@ export function AdminCatalogPage() {
   const [draft, setDraft] = useState<Draft>(() => emptyDraft('stock'))
   const [pending, setPending] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [tab, setTab] = useState<FormTab>('main')
 
   const title = kind === 'stock' ? 'Фонд (MOEX)' : 'Крипта (CoinGecko)'
 
@@ -54,6 +66,7 @@ export function AdminCatalogPage() {
     setEditing(null)
     setDraft(emptyDraft(kind))
     setLogoFile(null)
+    setTab('main')
     setCreating(true)
     setError(null)
   }
@@ -67,9 +80,21 @@ export function AdminCatalogPage() {
       name: item.name,
       currency: item.currency,
       enabled: item.enabled,
+      assetKind: item.assetKind === 'BOND' ? 'BOND' : 'EQUITY',
+      annualCashflowPerUnit: item.annualCashflowPerUnit != null ? String(item.annualCashflowPerUnit) : '',
+      cashflowGrowthPct: item.cashflowGrowthPct != null ? String(item.cashflowGrowthPct) : '',
+      cashflowUntilYear: item.cashflowUntilYear != null ? String(item.cashflowUntilYear) : '',
     })
     setLogoFile(null)
+    setTab('main')
     setError(null)
+  }
+
+  function closeModal() {
+    if (pending) return
+    setCreating(false)
+    setEditing(null)
+    setTab('main')
   }
 
   async function onSave(e: FormEvent) {
@@ -77,11 +102,23 @@ export function AdminCatalogPage() {
     setPending(true)
     setError(null)
     try {
+      const payload = {
+        symbol: draft.symbol,
+        externalId: draft.externalId,
+        name: draft.name,
+        currency: draft.currency,
+        enabled: draft.enabled,
+        assetKind: kind === 'stock' ? draft.assetKind : null,
+        annualCashflowPerUnit:
+          kind === 'stock' && draft.annualCashflowPerUnit.trim() ? Number(draft.annualCashflowPerUnit) : null,
+        cashflowGrowthPct: kind === 'stock' && draft.cashflowGrowthPct.trim() ? Number(draft.cashflowGrowthPct) : null,
+        cashflowUntilYear: kind === 'stock' && draft.cashflowUntilYear.trim() ? Number(draft.cashflowUntilYear) : null,
+      }
       let saved: Instrument
       if (editing) {
-        saved = await instrumentsApi.updateInstrument(kind, editing.id, draft)
+        saved = await instrumentsApi.updateInstrument(kind, editing.id, payload)
       } else {
-        saved = await instrumentsApi.createInstrument(kind, draft)
+        saved = await instrumentsApi.createInstrument(kind, payload)
       }
       if (logoFile) {
         saved = await instrumentsApi.uploadLogo(kind, saved.id, logoFile)
@@ -89,6 +126,7 @@ export function AdminCatalogPage() {
       setCreating(false)
       setEditing(null)
       setLogoFile(null)
+      setTab('main')
       await reload()
       void saved
     } catch (err) {
@@ -160,6 +198,9 @@ export function AdminCatalogPage() {
                   </strong>
                   <span className="holding-meta">
                     {item.name} · {item.externalId}
+                    {kind === 'stock' && item.annualCashflowPerUnit != null
+                      ? ` · ${formatMoney(item.annualCashflowPerUnit, item.currency)}/год`
+                      : ''}
                   </span>
                 </span>
               </span>
@@ -182,79 +223,153 @@ export function AdminCatalogPage() {
       <Modal
         open={modalOpen}
         title={editing ? `Изменить ${editing.symbol}` : `Новый актив · ${title}`}
-        onClose={() => !pending && (setCreating(false), setEditing(null))}
+        onClose={closeModal}
       >
-        <form className="stack" onSubmit={onSave}>
-          <p className="muted" style={{ marginTop: 0 }}>
-            {hint}
-          </p>
-          <div className="field">
-            <label htmlFor="adm-symbol">Тикер</label>
-            <input
-              id="adm-symbol"
-              required
-              value={draft.symbol}
-              onChange={(e) => setDraft({ ...draft, symbol: e.target.value })}
-            />
+        <form className="stack adm-form" onSubmit={onSave}>
+          {kind === 'stock' ? (
+            <div className="adm-tabs" role="tablist" aria-label="Разделы карточки актива">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'main'}
+                className={`adm-tab${tab === 'main' ? ' active' : ''}`}
+                onClick={() => setTab('main')}
+              >
+                Основное
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'cashflow'}
+                className={`adm-tab${tab === 'cashflow' ? ' active' : ''}`}
+                onClick={() => setTab('cashflow')}
+              >
+                Ден. поток
+              </button>
+            </div>
+          ) : null}
+
+          <div className={`adm-panel stack${tab === 'main' || kind !== 'stock' ? '' : ' adm-panel--hidden'}`} role="tabpanel">
+            <p className="muted" style={{ marginTop: 0 }}>
+              {hint}
+            </p>
+            <div className="field">
+              <label htmlFor="adm-symbol">Тикер</label>
+              <input
+                id="adm-symbol"
+                required
+                value={draft.symbol}
+                onChange={(e) => setDraft({ ...draft, symbol: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="adm-ext">externalId</label>
+              <input
+                id="adm-ext"
+                required
+                value={draft.externalId}
+                onChange={(e) => setDraft({ ...draft, externalId: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="adm-name">Название</label>
+              <input
+                id="adm-name"
+                required
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="adm-cur">Валюта</label>
+              <select
+                id="adm-cur"
+                required
+                value={draft.currency}
+                onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
+              >
+                <option value="RUB">RUB</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+            <label className="row" style={{ gap: '0.5rem' }}>
+              <input
+                type="checkbox"
+                checked={draft.enabled}
+                onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
+              />
+              Показывать пользователям
+            </label>
+            <div className="field">
+              <label htmlFor="adm-logo">Лого (png/jpg/webp/svg)</label>
+              <input
+                id="adm-logo"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor="adm-ext">externalId</label>
-            <input
-              id="adm-ext"
-              required
-              value={draft.externalId}
-              onChange={(e) => setDraft({ ...draft, externalId: e.target.value })}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="adm-name">Название</label>
-            <input
-              id="adm-name"
-              required
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="adm-cur">Валюта</label>
-            <select
-              id="adm-cur"
-              required
-              value={draft.currency}
-              onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
-            >
-              <option value="RUB">RUB</option>
-              <option value="USD">USD</option>
-            </select>
-          </div>
-          <label className="row" style={{ gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              checked={draft.enabled}
-              onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-            />
-            Показывать пользователям
-          </label>
-          <div className="field">
-            <label htmlFor="adm-logo">Лого (png/jpg/webp/svg)</label>
-            <input
-              id="adm-logo"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml"
-              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
-            />
-          </div>
+
+          {kind === 'stock' ? (
+            <div className={`adm-panel stack${tab === 'cashflow' ? '' : ' adm-panel--hidden'}`} role="tabpanel">
+              <p className="muted" style={{ marginTop: 0 }}>
+                Ожидаемый доход на 1 бумагу за текущий год и рост прогноза на следующие годы.
+              </p>
+              <div className="field">
+                <label htmlFor="adm-kind">Тип</label>
+                <select
+                  id="adm-kind"
+                  value={draft.assetKind}
+                  onChange={(e) => setDraft({ ...draft, assetKind: e.target.value as 'EQUITY' | 'BOND' })}
+                >
+                  <option value="EQUITY">Акция</option>
+                  <option value="BOND">Облигация</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="adm-cf">
+                  {draft.assetKind === 'BOND' ? 'Купон на 1 бумагу в год, ₽' : 'Дивиденд на 1 акцию в год, ₽'}
+                </label>
+                <input
+                  id="adm-cf"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={draft.annualCashflowPerUnit}
+                  onChange={(e) => setDraft({ ...draft, annualCashflowPerUnit: e.target.value })}
+                  placeholder="ожидание за текущий год, до налога"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="adm-growth">Прогноз роста на следующий год, %</label>
+                <input
+                  id="adm-growth"
+                  type="number"
+                  step="any"
+                  value={draft.cashflowGrowthPct}
+                  onChange={(e) => setDraft({ ...draft, cashflowGrowthPct: e.target.value })}
+                  placeholder="например 5"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="adm-until">До года включительно (необязательно)</label>
+                <input
+                  id="adm-until"
+                  type="number"
+                  step="1"
+                  min="1990"
+                  max="2200"
+                  value={draft.cashflowUntilYear}
+                  onChange={(e) => setDraft({ ...draft, cashflowUntilYear: e.target.value })}
+                />
+              </div>
+            </div>
+          ) : null}
+
           {error && modalOpen && <p className="error">{error}</p>}
           <div className="modal-actions">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={pending}
-              onClick={() => {
-                setCreating(false)
-                setEditing(null)
-              }}
-            >
+            <button type="button" className="btn btn-ghost" disabled={pending} onClick={closeModal}>
               Отмена
             </button>
             <button type="submit" className="btn" disabled={pending}>

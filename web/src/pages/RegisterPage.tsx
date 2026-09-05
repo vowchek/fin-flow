@@ -4,7 +4,7 @@ import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 
 export function RegisterPage() {
-  const { register, token } = useAuth()
+  const { register, token, user, loading } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -12,7 +12,15 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
-  if (token) return <Navigate to="/" replace />
+  if (loading) {
+    return (
+      <div className="page" style={{ maxWidth: 420 }}>
+        <p className="muted">Проверяем сессию…</p>
+      </div>
+    )
+  }
+
+  if (token && user) return <Navigate to="/" replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

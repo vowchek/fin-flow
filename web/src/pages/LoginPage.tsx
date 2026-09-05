@@ -4,7 +4,7 @@ import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 
 export function LoginPage() {
-  const { login, token } = useAuth()
+  const { login, token, user, loading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
@@ -14,7 +14,15 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
-  if (token) return <Navigate to={from} replace />
+  if (loading) {
+    return (
+      <div className="page" style={{ maxWidth: 420 }}>
+        <p className="muted">Проверяем сессию…</p>
+      </div>
+    )
+  }
+
+  if (token && user) return <Navigate to={from} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

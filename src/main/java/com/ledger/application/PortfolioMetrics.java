@@ -4,6 +4,7 @@ import com.ledger.api.dto.HoldingResponse;
 import com.ledger.api.dto.PortfolioDetailResponse;
 import com.ledger.api.dto.PortfolioSummaryResponse;
 import com.ledger.api.dto.ValuePointResponse;
+import com.ledger.domain.PortfolioEntryMode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -30,28 +31,41 @@ final class PortfolioMetrics {
         BigDecimal value = BigDecimal.ZERO;
         BigDecimal dayAbs = BigDecimal.ZERO;
         BigDecimal cost = BigDecimal.ZERO;
+        // Asset P&L only: price move + dividends/coupons (same as table rows).
+        // Cash free money from settled income is attributed via incomeAbs on the asset — do not
+        // also count cash (MV − cost), or settled dividends would be double-counted.
+        BigDecimal profit = BigDecimal.ZERO;
         boolean anyValue = false;
         boolean anyDay = false;
         boolean anyCost = false;
+        boolean anyProfit = false;
         String currency = defaultCurrency;
         for (HoldingResponse h : holdings) {
-            if (h.quantity().compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-            if (h.currency() != null) {
+            boolean open = h.quantity().compareTo(BigDecimal.ZERO) > 0;
+            if (h.currency() != null && open) {
                 currency = h.currency();
             }
-            if (h.marketValue() != null) {
-                value = value.add(h.marketValue());
-                anyValue = true;
+            if (open) {
+                if (h.marketValue() != null) {
+                    value = value.add(h.marketValue());
+                    anyValue = true;
+                }
+                if (h.dayChangeAbs() != null) {
+                    dayAbs = dayAbs.add(h.dayChangeAbs());
+                    anyDay = true;
+                }
+                if (h.costBasis() != null) {
+                    cost = cost.add(h.costBasis());
+                    anyCost = true;
+                }
             }
-            if (h.dayChangeAbs() != null) {
-                dayAbs = dayAbs.add(h.dayChangeAbs());
-                anyDay = true;
-            }
-            if (h.costBasis() != null) {
-                cost = cost.add(h.costBasis());
-                anyCost = true;
+            if (!h.cash()) {
+                BigDecimal price = h.totalChangeAbs() != null ? h.totalChangeAbs() : BigDecimal.ZERO;
+                BigDecimal income = h.incomeAbs() != null ? h.incomeAbs() : BigDecimal.ZERO;
+                if (h.totalChangeAbs() != null || h.incomeAbs() != null) {
+                    profit = profit.add(price).add(income);
+                    anyProfit = true;
+                }
             }
         }
         BigDecimal dayPct = null;
@@ -63,9 +77,11 @@ final class PortfolioMetrics {
         }
         BigDecimal totalAbs = null;
         BigDecimal totalPct = null;
-        if (anyValue && anyCost && cost.compareTo(BigDecimal.ZERO) > 0) {
-            totalAbs = value.subtract(cost);
-            totalPct = totalAbs.divide(cost, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+        if (anyProfit) {
+            totalAbs = profit;
+            if (anyCost && cost.compareTo(BigDecimal.ZERO) > 0) {
+                totalPct = totalAbs.divide(cost, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+            }
         }
         return new Totals(
                 anyValue ? value : null,
@@ -81,6 +97,7 @@ final class PortfolioMetrics {
             UUID id,
             String name,
             String description,
+            PortfolioEntryMode entryMode,
             int holdingsCount,
             List<HoldingResponse> holdings,
             String defaultCurrency,
@@ -92,6 +109,7 @@ final class PortfolioMetrics {
                 id,
                 name,
                 description,
+                entryMode == null ? PortfolioEntryMode.MANUAL : entryMode,
                 holdingsCount,
                 holdings.stream()
                         .filter(h -> h.quantity().compareTo(BigDecimal.ZERO) > 0)
@@ -111,9 +129,11 @@ final class PortfolioMetrics {
             UUID id,
             String name,
             String description,
+            PortfolioEntryMode entryMode,
             List<HoldingResponse> holdings,
             List<ValuePointResponse> valueHistory,
             String defaultCurrency,
+            BigDecimal taxRatePercent,
             Instant createdAt,
             Instant updatedAt
     ) {
@@ -122,6 +142,7 @@ final class PortfolioMetrics {
                 id,
                 name,
                 description,
+                entryMode == null ? PortfolioEntryMode.MANUAL : entryMode,
                 holdings,
                 valueHistory,
                 totals.totalValue(),
@@ -130,6 +151,7 @@ final class PortfolioMetrics {
                 totals.totalChangeAbs(),
                 totals.totalChangePct(),
                 totals.currency(),
+                taxRatePercent,
                 createdAt,
                 updatedAt
         );

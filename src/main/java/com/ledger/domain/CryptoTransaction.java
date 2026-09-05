@@ -31,6 +31,14 @@ public class CryptoTransaction {
     @Column(nullable = false, length = 8)
     private TradeSide side;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private TxKind kind;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_holding_id")
+    private CryptoHolding relatedHolding;
+
     @Column(nullable = false, precision = 28, scale = 8)
     private BigDecimal quantity;
 
@@ -58,9 +66,25 @@ public class CryptoTransaction {
             BigDecimal unitPrice,
             String note
     ) {
+        this(id, holding, side, TxKind.TRADE, null, quantity, occurredOn, unitPrice, note);
+    }
+
+    public CryptoTransaction(
+            UUID id,
+            CryptoHolding holding,
+            TradeSide side,
+            TxKind kind,
+            CryptoHolding relatedHolding,
+            BigDecimal quantity,
+            LocalDate occurredOn,
+            BigDecimal unitPrice,
+            String note
+    ) {
         this.id = id;
         this.holding = holding;
         this.side = side;
+        this.kind = kind == null ? TxKind.TRADE : kind;
+        this.relatedHolding = relatedHolding;
         this.quantity = quantity;
         this.occurredOn = occurredOn;
         this.unitPrice = unitPrice;
@@ -70,6 +94,9 @@ public class CryptoTransaction {
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
+        if (kind == null) {
+            kind = TxKind.TRADE;
+        }
     }
 
     public UUID getId() {
@@ -82,6 +109,14 @@ public class CryptoTransaction {
 
     public TradeSide getSide() {
         return side;
+    }
+
+    public TxKind getKind() {
+        return kind;
+    }
+
+    public CryptoHolding getRelatedHolding() {
+        return relatedHolding;
     }
 
     public BigDecimal getQuantity() {

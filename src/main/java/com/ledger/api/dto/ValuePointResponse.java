@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 public record ValuePointResponse(
         LocalDate date,
-        BigDecimal value
+        BigDecimal value,
+        BigDecimal invested
 ) {
 }

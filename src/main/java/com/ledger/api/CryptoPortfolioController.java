@@ -1,12 +1,15 @@
 package com.ledger.api;
 
+import com.ledger.api.dto.CashMovementRequest;
 import com.ledger.api.dto.HoldingCreateRequest;
 import com.ledger.api.dto.HoldingResponse;
+import com.ledger.api.dto.LazyCryptoSeedRequest;
 import com.ledger.api.dto.PortfolioDetailResponse;
 import com.ledger.api.dto.PortfolioRequest;
 import com.ledger.api.dto.PortfolioSummaryResponse;
 import com.ledger.api.dto.TradeRequest;
 import com.ledger.api.dto.TradeResponse;
+import com.ledger.api.dto.ValuePointResponse;
 import com.ledger.application.CryptoPortfolioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,6 +51,12 @@ public class CryptoPortfolioController {
         return portfolios.get(id);
     }
 
+    @GetMapping("/{id}/value-history")
+    @Operation(summary = "График стоимости портфеля по дням")
+    public List<ValuePointResponse> valueHistory(@PathVariable UUID id) {
+        return portfolios.valueHistory(id);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PortfolioDetailResponse create(@Valid @RequestBody PortfolioRequest request) {
@@ -72,6 +81,12 @@ public class CryptoPortfolioController {
         return portfolios.openHolding(id, request);
     }
 
+    @PostMapping("/{id}/lazy-seed")
+    @Operation(summary = "Ленивый ввод / пересчёт: сумма вложений и количества (заменяет некэш-позиции)")
+    public PortfolioDetailResponse lazySeed(@PathVariable UUID id, @Valid @RequestBody LazyCryptoSeedRequest request) {
+        return portfolios.seedLazy(id, request);
+    }
+
     @PostMapping("/{id}/holdings/{holdingId}/buys")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Купить")
@@ -92,6 +107,20 @@ public class CryptoPortfolioController {
             @Valid @RequestBody TradeRequest request
     ) {
         return portfolios.sell(id, holdingId, request);
+    }
+
+    @PostMapping("/{id}/cash/deposits")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Внести наличные")
+    public HoldingResponse depositCash(@PathVariable UUID id, @Valid @RequestBody CashMovementRequest request) {
+        return portfolios.depositCash(id, request);
+    }
+
+    @PostMapping("/{id}/cash/withdrawals")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Снять наличные")
+    public HoldingResponse withdrawCash(@PathVariable UUID id, @Valid @RequestBody CashMovementRequest request) {
+        return portfolios.withdrawCash(id, request);
     }
 
     @GetMapping("/{id}/holdings/{holdingId}/transactions")

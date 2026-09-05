@@ -49,7 +49,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new InstrumentUpsertRequest("SBER", "SBER", "Сбербанк", "RUB", true))))
+                                new InstrumentUpsertRequest("SBER", "SBER", "Сбербанк", "RUB", true, null, null, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID stockInstrumentId = UUID.fromString(objectMapper.readTree(stockInstrument.getResponse().getContentAsString())
@@ -59,7 +59,7 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new InstrumentUpsertRequest("BTC", "bitcoin", "Bitcoin", "USD", true))))
+                                new InstrumentUpsertRequest("BTC", "bitcoin", "Bitcoin", "USD", true, null, null, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID cryptoInstrumentId = UUID.fromString(objectMapper.readTree(cryptoInstrument.getResponse().getContentAsString())
@@ -68,7 +68,7 @@ class LedgerApiIT {
         MvcResult stockCreated = mvc.perform(post("/api/v1/stock-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Брокер", "ИИС"))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Брокер", "ИИС", null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID stockId = UUID.fromString(objectMapper.readTree(stockCreated.getResponse().getContentAsString())
@@ -122,7 +122,7 @@ class LedgerApiIT {
         MvcResult cryptoCreated = mvc.perform(post("/api/v1/crypto-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Cold", null))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Cold", null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID cryptoId = UUID.fromString(objectMapper.readTree(cryptoCreated.getResponse().getContentAsString())
@@ -162,7 +162,7 @@ class LedgerApiIT {
         MvcResult created = mvc.perform(post("/api/v1/stock-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(alice))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Alice", null))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Alice", null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID portfolioId = UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsString())
@@ -185,13 +185,13 @@ class LedgerApiIT {
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new InstrumentUpsertRequest("ETH", "ethereum", "Ethereum", "USD", true))))
+                                new InstrumentUpsertRequest("ETH", "ethereum", "Ethereum", "USD", true, null, null, null, null))))
                 .andExpect(status().isCreated());
 
         MvcResult created = mvc.perform(post("/api/v1/crypto-portfolios")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Main", null))))
+                        .content(objectMapper.writeValueAsString(new PortfolioRequest("Main", null, "LAZY"))))
                 .andExpect(status().isCreated())
                 .andReturn();
         UUID portfolioId = UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsString())

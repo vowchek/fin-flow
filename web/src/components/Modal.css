@@ -12,6 +12,9 @@
 
 .modal-card {
   width: min(420px, 100%);
+  max-height: min(90vh, 820px);
+  display: flex;
+  flex-direction: column;
   background: var(--bg-elevated);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -20,7 +23,8 @@
 }
 
 .modal-card.wide {
-  width: min(520px, 100%);
+  width: min(720px, 100%);
+  max-height: min(90vh, 900px);
 }
 
 .modal-head {
@@ -29,6 +33,7 @@
   justify-content: space-between;
   gap: 0.75rem;
   padding: 1rem 1.1rem 0.35rem;
+  flex: 0 0 auto;
 }
 
 .modal-head h2 {
@@ -37,6 +42,44 @@
 
 .modal-body {
   padding: 0.5rem 1.1rem 1.15rem;
+  overflow: auto;
+  min-height: 0;
+}
+
+.adm-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 0 0.85rem;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ink) 3%, var(--bg-elevated));
+}
+
+.adm-tab {
+  flex: 1;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.45rem 0.65rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.adm-tab:hover {
+  color: var(--ink);
+}
+
+.adm-tab.active {
+  background: var(--bg-elevated);
+  color: var(--ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.adm-panel--hidden {
+  display: none !important;
 }
 
 .modal-actions {
