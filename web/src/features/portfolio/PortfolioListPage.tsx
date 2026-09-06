@@ -93,10 +93,13 @@ export function PortfolioListPage({ kind, title, basePath }: Props) {
             const { best, worst } = dayMovers(item.holdings ?? [])
             return (
               <article key={item.id} className="pf-card">
-                <Link to={`${basePath}/${item.id}`} className="pf-card-link" aria-label={item.name} />
                 <div className="pf-card-body">
                   <div className="pf-card-main">
-                    <h2 className="pf-card-title">{item.name}</h2>
+                    <h2 className="pf-card-title">
+                      <Link to={`${basePath}/${item.id}`} className="pf-card-title-link">
+                        {item.name}
+                      </Link>
+                    </h2>
                     {item.description ? <p className="pf-card-desc">{item.description}</p> : null}
 
                     <div className="pf-card-metrics">

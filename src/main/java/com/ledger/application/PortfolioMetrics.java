@@ -27,7 +27,17 @@ final class PortfolioMetrics {
     ) {
     }
 
-    static Totals of(List<HoldingResponse> holdings, String defaultCurrency, BigDecimal investedAmount) {
+    /**
+     * @param marketMinusInvested when true (stock), period P&amp;L is totalValue − investedAmount;
+     *                            when false (crypto), period P&amp;L is sum of asset price + income
+     *                            (investedAmount only used as % basis if set).
+     */
+    static Totals of(
+            List<HoldingResponse> holdings,
+            String defaultCurrency,
+            BigDecimal investedAmount,
+            boolean marketMinusInvested
+    ) {
         BigDecimal value = BigDecimal.ZERO;
         BigDecimal dayAbs = BigDecimal.ZERO;
         BigDecimal cost = BigDecimal.ZERO;
@@ -77,15 +87,21 @@ final class PortfolioMetrics {
         }
         BigDecimal totalAbs = null;
         BigDecimal totalPct = null;
-        // Portfolio P&L: market value − cash invested (same as detail «Прибыль»).
-        if (investedAmount != null && investedAmount.compareTo(BigDecimal.ZERO) > 0 && anyValue) {
+        if (marketMinusInvested
+                && investedAmount != null
+                && investedAmount.compareTo(BigDecimal.ZERO) > 0
+                && anyValue) {
+            // Stock: portfolio cash invested vs current market value (incl. cash).
             totalAbs = value.subtract(investedAmount);
             totalPct = totalAbs.divide(investedAmount, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
         } else if (anyProfit) {
-            // Fallback when invested is unset: asset price move + dividends/coupons.
+            // Crypto (and stock without invested): sum of asset P&L rows.
             totalAbs = profit;
-            if (anyCost && cost.compareTo(BigDecimal.ZERO) > 0) {
-                totalPct = totalAbs.divide(cost, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+            BigDecimal basis = investedAmount != null && investedAmount.compareTo(BigDecimal.ZERO) > 0
+                    ? investedAmount
+                    : (anyCost ? cost : null);
+            if (basis != null && basis.compareTo(BigDecimal.ZERO) > 0) {
+                totalPct = totalAbs.divide(basis, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
             }
         }
         return new Totals(
@@ -107,10 +123,11 @@ final class PortfolioMetrics {
             List<HoldingResponse> holdings,
             String defaultCurrency,
             BigDecimal investedAmount,
+            boolean marketMinusInvested,
             Instant createdAt,
             Instant updatedAt
     ) {
-        Totals totals = of(holdings, defaultCurrency, investedAmount);
+        Totals totals = of(holdings, defaultCurrency, investedAmount, marketMinusInvested);
         return new PortfolioSummaryResponse(
                 id,
                 name,
@@ -141,10 +158,11 @@ final class PortfolioMetrics {
             String defaultCurrency,
             BigDecimal taxRatePercent,
             BigDecimal investedAmount,
+            boolean marketMinusInvested,
             Instant createdAt,
             Instant updatedAt
     ) {
-        Totals totals = of(holdings, defaultCurrency, investedAmount);
+        Totals totals = of(holdings, defaultCurrency, investedAmount, marketMinusInvested);
         return new PortfolioDetailResponse(
                 id,
                 name,

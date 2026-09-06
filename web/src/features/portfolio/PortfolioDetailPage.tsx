@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import * as instrumentsApi from '../../api/instruments'
@@ -48,6 +49,59 @@ type Dialog =
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function PassiveMonthLabel({ basis }: { basis?: string | null }) {
+  const tipId = useId()
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null)
+  const hint =
+    basis === 'ACTUAL' ? 'Факт' : basis === 'FORECAST' ? 'Прогноз' : null
+
+  useEffect(() => {
+    if (!anchor) return
+    const close = () => setAnchor(null)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [anchor])
+
+  if (!hint) return <span>В месяц</span>
+
+  return (
+    <span
+      className="pf-metric-hint"
+      tabIndex={0}
+      aria-describedby={anchor ? tipId : undefined}
+      onMouseEnter={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        setAnchor({ left: r.left + r.width / 2, top: r.top - 8 })
+      }}
+      onFocus={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        setAnchor({ left: r.left + r.width / 2, top: r.top - 8 })
+      }}
+      onMouseLeave={() => setAnchor(null)}
+      onBlur={() => setAnchor(null)}
+    >
+      В месяц
+      {anchor
+        ? createPortal(
+            <span
+              id={tipId}
+              className="pf-ticker-tip"
+              role="tooltip"
+              style={{ left: anchor.left, top: anchor.top }}
+            >
+              {hint}
+            </span>,
+            document.body,
+          )
+        : null}
+    </span>
+  )
 }
 
 function avgPrice(h: Holding) {
@@ -457,16 +511,34 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     ...(showClosed ? [...openHoldings, ...closedHoldings] : openHoldings),
     ...(cashHolding ? [cashHolding] : []),
   ]
+  // Stock: manual «вложено». Crypto: sum of open cost bases (lazy allocation / buys).
+  const costInvested = openHoldings.reduce((sum, h) => sum + Number(h.costBasis ?? 0), 0)
   const invested =
-    portfolio.investedAmount != null ? Number(portfolio.investedAmount) : null
+    kind === 'stock'
+      ? portfolio.investedAmount != null
+        ? Number(portfolio.investedAmount)
+        : null
+      : costInvested > 0
+        ? costInvested
+        : portfolio.investedAmount != null
+          ? Number(portfolio.investedAmount)
+          : null
   const totalValue = portfolio.totalValue != null ? Number(portfolio.totalValue) : null
-  const profitTotal =
-    totalValue != null && invested != null ? totalValue - invested : null
   const profitPrice = assetHoldings.reduce((sum, h) => sum + Number(h.totalChangeAbs ?? 0), 0)
-  const profitIncome = assetHoldings.reduce((sum, h) => sum + Number(h.incomeAbs ?? 0), 0)
+  const profitIncome =
+    kind === 'stock' ? assetHoldings.reduce((sum, h) => sum + Number(h.incomeAbs ?? 0), 0) : 0
+  const profitTotal =
+    kind === 'stock'
+      ? totalValue != null && invested != null
+        ? totalValue - invested
+        : null
+      : assetHoldings.some((h) => h.totalChangeAbs != null)
+        ? profitPrice
+        : null
   const profitOther =
-    profitTotal != null ? profitTotal - profitPrice - profitIncome : null
-  const showProfitTip = profitTotal != null
+    kind === 'stock' && profitTotal != null ? profitTotal - profitPrice - profitIncome : null
+  // Breakdown tip only for stock (price / divs / other). Crypto is price-only.
+  const showProfitTip = kind === 'stock' && profitTotal != null
 
   return (
     <div className="page page-wide">
@@ -591,18 +663,12 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                 : formatMoney(passiveIncome?.annualNet ?? 0, currency)}
               {passiveIncome && portfolio.totalValue != null && Number(portfolio.totalValue) > 0 ? (
                 <span className="pf-metric-pct">
-                  {formatPct((Number(passiveIncome.annualNet) / Number(portfolio.totalValue)) * 100)}
+                  {`${((Number(passiveIncome.annualNet) / Number(portfolio.totalValue)) * 100).toFixed(2)}%`}
                 </span>
               ) : null}
             </p>
             <p className="pf-metric-sub">
-              <span>
-                {passiveIncome?.basis === 'ACTUAL'
-                  ? 'Факт · в месяц'
-                  : passiveIncome?.basis === 'FORECAST'
-                    ? 'Прогноз · в месяц'
-                    : 'В месяц'}
-              </span>
+              <PassiveMonthLabel basis={passiveIncome?.basis} />
               <strong>{formatMoney(passiveIncome?.monthlyNet ?? 0, currency)}</strong>
             </p>
           </section>
@@ -659,9 +725,15 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                   const cur = h.currency || currency
                   const avg = avgPrice(h)
                   const share = sharePct(h, portfolio.totalValue)
-                  const income = Number(h.incomeAbs ?? 0)
-                  const ret = totalReturn(h)
+                  const income = kind === 'stock' ? Number(h.incomeAbs ?? 0) : 0
                   const pricePart = pricePnl(h)
+                  // Crypto: price move only (no dividends). Stock: price + income.
+                  const ret =
+                    kind === 'crypto'
+                      ? pricePart == null
+                        ? null
+                        : Number(pricePart)
+                      : totalReturn(h)
                   const retPct =
                     ret != null && holdingCost(h) != null && Number(holdingCost(h)) > 0
                       ? (ret / Number(holdingCost(h))) * 100
@@ -670,7 +742,8 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                         : income > 0
                           ? null
                           : h.totalChangePct
-                  const showPnlTip = !isCash && (ret != null || pricePart != null || income !== 0)
+                  const showPnlTip =
+                    kind === 'stock' && !isCash && (ret != null || pricePart != null || income !== 0)
                   return (
                     <tr
                       key={h.id}

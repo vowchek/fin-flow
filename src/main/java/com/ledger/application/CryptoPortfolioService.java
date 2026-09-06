@@ -507,6 +507,7 @@ public class CryptoPortfolioService {
                 holdingResponses,
                 marketDataProperties.quoteCurrency(MARKET),
                 portfolio.getInvestedAmount(),
+                false,
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );
@@ -525,6 +526,7 @@ public class CryptoPortfolioService {
                 marketDataProperties.quoteCurrency(MARKET),
                 null,
                 portfolio.getInvestedAmount(),
+                false,
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );

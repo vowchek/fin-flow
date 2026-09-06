@@ -642,6 +642,7 @@ public class StockPortfolioService {
                 holdingResponses,
                 marketDataProperties.quoteCurrency(MARKET),
                 portfolio.getInvestedAmount(),
+                true,
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );
@@ -660,6 +661,7 @@ public class StockPortfolioService {
                 marketDataProperties.quoteCurrency(MARKET),
                 portfolio.getTaxRatePercent(),
                 portfolio.getInvestedAmount(),
+                true,
                 portfolio.getCreatedAt(),
                 portfolio.getUpdatedAt()
         );

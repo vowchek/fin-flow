@@ -684,6 +684,7 @@ h3 {
   display: grid;
   gap: 0;
   padding: 0;
+  min-width: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -695,13 +696,6 @@ h3 {
 .pf-card:hover {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
   box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.pf-card-link {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: inherit;
 }
 
 .pf-card-body {
@@ -719,11 +713,19 @@ h3 {
   font-size: 1.45rem;
   font-weight: 700;
   line-height: 1.15;
-  color: var(--ink);
   letter-spacing: -0.025em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pf-card-title-link {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.pf-card-title-link:hover {
+  color: var(--accent);
 }
 
 .pf-card-kind {
@@ -834,9 +836,12 @@ h3 {
   padding: 0.55rem 1.2rem 0.75rem;
   border-top: 1px solid var(--line);
   overflow: hidden;
-  min-height: 0;
+  min-width: 0;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  /* Hard single-line row — never wrap tickers onto a second line. */
+  max-height: 2.6rem;
 }
 
 .pf-ticker {
@@ -845,6 +850,7 @@ h3 {
   font-weight: 650;
   letter-spacing: 0.03em;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .pf-ticker[hidden] {
@@ -853,8 +859,30 @@ h3 {
 
 .pf-ticker.more {
   color: var(--muted);
+  font-weight: 700;
+  opacity: 0.85;
+  flex-shrink: 0;
+  cursor: help;
+  border-bottom: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.pf-ticker-tip {
+  position: fixed;
+  z-index: 1200;
+  transform: translate(-50%, -100%);
+  max-width: min(20rem, calc(100vw - 1.5rem));
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  color: var(--ink);
+  font-size: 0.78rem;
   font-weight: 600;
-  opacity: 0.75;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  pointer-events: none;
 }
 
 .pf-card-chart .chart-wrap.compact {
@@ -1034,6 +1062,11 @@ h3 {
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.pf-metric-hint {
+  cursor: help;
+  border-bottom: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
 }
 
 .pf-metric-sub strong {
