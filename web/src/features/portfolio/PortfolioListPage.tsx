@@ -6,7 +6,6 @@ import type { Holding, PortfolioKind, PortfolioSummary } from '../../api/types'
 import { MarketStrip } from '../../components/MarketStrip'
 import { AssetTickerStrip } from '../../components/AssetTickerStrip'
 import { PortfolioChart } from '../../components/PortfolioChart'
-import { PortfolioKindIcon } from '../../components/PortfolioKindIcon'
 import { changeClass, formatMoney, formatPct } from '../../lib/format'
 import { CreatePortfolioWizard } from './CreatePortfolioWizard'
 
@@ -64,10 +63,7 @@ export function PortfolioListPage({ kind, title, basePath }: Props) {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1 className="page-title page-title-with-icon">
-            <span className="page-kind-icon" aria-hidden>
-              <PortfolioKindIcon kind={kind} size={28} />
-            </span>
+          <h1 className="page-title">
             {title}
           </h1>
         </div>

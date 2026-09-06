@@ -1,8 +1,10 @@
 package com.ledger.api;
 
+import com.ledger.api.dto.ExpenseCategoryRequest;
 import com.ledger.api.dto.ExpenseCategoryResponse;
 import com.ledger.api.dto.ExpenseRequest;
 import com.ledger.api.dto.ExpenseResponse;
+import com.ledger.api.dto.ExpenseSummaryResponse;
 import com.ledger.application.ExpenseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,16 +35,46 @@ public class ExpenseController {
         this.expenses = expenses;
     }
 
+    /* ── categories ── */
+
     @GetMapping("/expense-categories")
-    @Operation(summary = "Справочник категорий трат")
-    public List<ExpenseCategoryResponse> categories() {
-        return expenses.categories();
+    @Operation(summary = "Категории трат текущего пользователя")
+    public List<ExpenseCategoryResponse> listCategories() {
+        return expenses.listCategories();
     }
+
+    @PostMapping("/expense-categories")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Создать категорию трат")
+    public ExpenseCategoryResponse createCategory(@Valid @RequestBody ExpenseCategoryRequest request) {
+        return expenses.createCategory(request);
+    }
+
+    @PutMapping("/expense-categories/{id}")
+    @Operation(summary = "Переименовать категорию трат")
+    public ExpenseCategoryResponse updateCategory(@PathVariable UUID id, @Valid @RequestBody ExpenseCategoryRequest request) {
+        return expenses.updateCategory(id, request);
+    }
+
+    @DeleteMapping("/expense-categories/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Удалить категорию трат")
+    public void deleteCategory(@PathVariable UUID id) {
+        expenses.deleteCategory(id);
+    }
+
+    /* ── expenses ── */
 
     @GetMapping("/expenses")
     @Operation(summary = "Траты за диапазон месяцев (yyyy-MM)")
     public List<ExpenseResponse> list(@RequestParam String from, @RequestParam String to) {
         return expenses.list(from, to);
+    }
+
+    @GetMapping("/expenses/summary")
+    @Operation(summary = "Сводка по тратам: суммы по категориям по месяцам")
+    public ExpenseSummaryResponse summary(@RequestParam String from, @RequestParam String to) {
+        return expenses.summary(from, to);
     }
 
     @GetMapping("/expenses/{id}")
@@ -65,5 +97,12 @@ public class ExpenseController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {
         expenses.delete(id);
+    }
+
+    @DeleteMapping("/expenses")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Удалить все траты категории за год")
+    public int deleteByCategory(@RequestParam UUID categoryId, @RequestParam int year) {
+        return expenses.deleteByCategory(categoryId, year);
     }
 }

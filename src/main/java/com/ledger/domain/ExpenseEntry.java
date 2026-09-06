@@ -2,8 +2,6 @@ package com.ledger.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -28,9 +26,9 @@ public class ExpenseEntry {
     @JoinColumn(name = "owner_id", nullable = false)
     private AppUser owner;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 32)
-    private ExpenseCategory category;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "category_id", nullable = false)
+    private ExpenseCategoryEntity category;
 
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
@@ -56,7 +54,7 @@ public class ExpenseEntry {
     public ExpenseEntry(
             UUID id,
             AppUser owner,
-            ExpenseCategory category,
+            ExpenseCategoryEntity category,
             BigDecimal amount,
             String currency,
             LocalDate occurredMonth,
@@ -91,11 +89,11 @@ public class ExpenseEntry {
         return owner;
     }
 
-    public ExpenseCategory getCategory() {
+    public ExpenseCategoryEntity getCategory() {
         return category;
     }
 
-    public void setCategory(ExpenseCategory category) {
+    public void setCategory(ExpenseCategoryEntity category) {
         this.category = category;
     }
 

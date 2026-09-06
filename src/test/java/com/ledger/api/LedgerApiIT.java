@@ -2,13 +2,13 @@ package com.ledger.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ledger.api.dto.ExpenseCategoryRequest;
 import com.ledger.api.dto.ExpenseRequest;
 import com.ledger.api.dto.HoldingCreateRequest;
 import com.ledger.api.dto.InstrumentUpsertRequest;
 import com.ledger.api.dto.PortfolioRequest;
 import com.ledger.api.dto.RegisterRequest;
 import com.ledger.api.dto.TradeRequest;
-import com.ledger.domain.ExpenseCategory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -141,11 +141,20 @@ class LedgerApiIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].symbol", is("SBER")));
 
+        MvcResult categoryResult = mvc.perform(post("/api/v1/expense-categories")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ExpenseCategoryRequest("Продукты"))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        UUID categoryId = UUID.fromString(objectMapper.readTree(categoryResult.getResponse().getContentAsString())
+                .get("id").asText());
+
         mvc.perform(post("/api/v1/expenses")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new ExpenseRequest(
-                                ExpenseCategory.GROCERIES,
+                                categoryId,
                                 new BigDecimal("15000.00"),
                                 "RUB",
                                 "2026-08",

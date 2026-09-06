@@ -1,5 +1,6 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { useAuthModal } from '../auth/AuthModalContext'
 import { PortfolioKindIcon } from '../components/PortfolioKindIcon'
 import { useTheme } from '../theme/ThemeContext'
 import './Header.css'
@@ -7,11 +8,12 @@ import './Header.css'
 const nav = [
   { to: '/stocks', label: 'Фондовые портфели', kind: 'stock' as const },
   { to: '/crypto', label: 'Криптопортфели', kind: 'crypto' as const },
-  { to: '/expenses', label: 'Учёт трат', kind: null },
+  { to: '/expenses', label: 'Учёт трат', kind: 'expense' as const },
 ]
 
 export function Header() {
   const { user, logout } = useAuth()
+  const { openLogin, openRegister } = useAuthModal()
   const { theme, toggle } = useTheme()
   const display = user?.displayName?.trim() || user?.email || '—'
 
@@ -27,41 +29,63 @@ export function Header() {
           </span>
         </Link>
 
-        <nav className="header-nav" aria-label="Основное">
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
-            >
-              {item.kind ? <PortfolioKindIcon kind={item.kind} size={16} className="nav-kind-icon" /> : null}
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        {user ? (
+          <>
+            <nav className="header-nav" aria-label="Основное">
+              {nav.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+                >
+                  <PortfolioKindIcon kind={item.kind} size={16} className="nav-kind-icon" />
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
 
-        <div className="header-user">
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
-            title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
-            onClick={toggle}
-          >
-            {theme === 'light' ? <MoonIcon /> : <SunIcon />}
-          </button>
-          {user?.role === 'ADMIN' ? (
-            <NavLink to="/admin" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
-              Админ
-            </NavLink>
-          ) : null}
-          <span className="user-name" title={user?.email}>
-            {display}
-          </span>
-          <button type="button" className="btn btn-ghost" onClick={logout}>
-            Выйти
-          </button>
-        </div>
+            <div className="header-user">
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+                title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+                onClick={toggle}
+              >
+                {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+              </button>
+              {user?.role === 'ADMIN' ? (
+                <NavLink to="/admin" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
+                  Админ
+                </NavLink>
+              ) : null}
+              <span className="user-name" title={user?.email}>
+                {display}
+              </span>
+              <button type="button" className="btn btn-ghost" onClick={logout}>
+                Выйти
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="header-user">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+              title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
+              onClick={toggle}
+            >
+              {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={openLogin}>
+              Войти
+            </button>
+            <button type="button" className="btn btn-sm" onClick={openRegister}>
+              Регистрация
+            </button>
+          </div>
+        )}
       </div>
     </header>
   )

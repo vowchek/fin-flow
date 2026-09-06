@@ -105,6 +105,16 @@ h3 {
   padding: 1.75rem 0 3.5rem;
 }
 
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+}
+
 .page-head {
   display: flex;
   align-items: flex-start;
@@ -122,17 +132,6 @@ h3 {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-}
-
-.page-kind-icon {
-  display: grid;
-  place-items: center;
-  width: 2.35rem;
-  height: 2.35rem;
-  border-radius: 0.7rem;
-  background: var(--accent-soft);
-  color: var(--accent);
-  flex: 0 0 auto;
 }
 
 .page-mode-icon {
@@ -245,28 +244,31 @@ h3 {
 }
 
 .btn {
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.58rem 1.05rem;
-  background: var(--accent);
-  color: #ffffff;
+  background: var(--bg-elevated);
+  color: var(--ink);
   font-weight: 600;
   transition: background 0.15s ease, opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
-[data-theme='dark'] .btn:not(.btn-ghost):not(.btn-danger) {
-  color: #10201f;
-  font-weight: 650;
-}
-
 .btn:hover {
-  background: var(--accent-hover);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--accent);
 }
 
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  background: var(--bg-elevated);
+  border-color: var(--line);
+  color: var(--ink);
 }
 
 .btn-ghost {
@@ -1453,4 +1455,527 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Expense page ─────────────────────────────── */
+
+/* Year panel */
+.exp-year-panel {
+  margin-bottom: 0.75rem;
+}
+
+.exp-year-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.exp-year-label {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 650;
+  min-width: 4.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.exp-month-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.4rem;
+}
+
+@media (max-width: 600px) {
+  .exp-month-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.exp-month-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.55rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  font: inherit;
+}
+
+.exp-month-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.exp-month-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+[data-theme='dark'] .exp-month-btn.selected {
+  color: var(--accent);
+}
+
+.exp-month-btn.current:not(.selected) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.exp-month-btn-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.exp-month-btn-total {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.exp-month-btn.selected .exp-month-btn-total {
+  opacity: 0.85;
+}
+
+.exp-year-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
+.exp-year-total-label {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.exp-year-total-value {
+  font-weight: 650;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Quick-add form */
+.exp-add-panel {
+  margin-bottom: 0.75rem;
+}
+
+.exp-add-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.exp-add-hint-inline {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.exp-add-row {
+  display: flex;
+  align-items: end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.exp-add-cat {
+  flex: 1.3;
+  min-width: 150px;
+}
+
+.exp-add-amount {
+  flex: 0.7;
+  min-width: 100px;
+  max-width: 160px;
+}
+
+.exp-add-note {
+  flex: 1;
+  min-width: 120px;
+}
+
+.exp-add-btn {
+  height: fit-content;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.exp-add-hint {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Tabs */
+.exp-tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.exp-tab {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.exp-tab:hover {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+.exp-tab.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+[data-theme='dark'] .exp-tab.active {
+  color: var(--accent);
+}
+
+/* Operations panel */
+.exp-ops-panel {
+  padding: 0.85rem 1rem;
+}
+
+.exp-ops-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.exp-ops-count {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.exp-ops-total {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Expense list */
+.exp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.exp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input-bg);
+  transition: border-color 0.12s;
+}
+
+.exp-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+
+.exp-row.editing {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.exp-row-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.exp-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.exp-row-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.exp-row-amt {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.exp-row-btns {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.exp-row:hover .exp-row-btns {
+  opacity: 1;
+}
+
+.exp-row.editing .exp-row-btns {
+  opacity: 1;
+}
+
+/* Edit fields */
+.exp-edit-fields {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.exp-edit-fields select,
+.exp-edit-fields input {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  background: var(--input-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.exp-edit-fields select:focus,
+.exp-edit-fields input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
+}
+
+.exp-edit-cat {
+  min-width: 130px;
+}
+
+.exp-edit-amt {
+  width: 90px;
+}
+
+.exp-edit-note {
+  flex: 1;
+  min-width: 80px;
+}
+
+/* Analytics */
+.exp-analytics {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.exp-chart-wrap {
+  width: 100%;
+  height: 320px;
+}
+
+.exp-analytics-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.exp-pie-panel {
+  flex: 1;
+}
+
+.exp-totals-panel {
+  flex: 1;
+  min-width: 240px;
+}
+
+@media (max-width: 800px) {
+  .exp-analytics-row {
+    flex-direction: column;
+  }
+}
+
+.exp-pie-wrap {
+  width: 100%;
+  height: 260px;
+}
+
+/* Totals list */
+.exp-totals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.exp-totals-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.exp-totals-row:last-child {
+  border-bottom: 0;
+}
+
+.exp-totals-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.exp-totals-name {
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exp-totals-right {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.exp-totals-pct {
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-width: 3rem;
+  text-align: right;
+}
+
+.exp-totals-val {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+}
+
+/* ── Category modal ──────────────────────────── */
+
+.cat-add-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.cat-add-input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  background: var(--input-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.cat-add-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
+}
+
+.cat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input-bg);
+}
+
+.cat-row.editing {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.cat-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.cat-row-btns {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.cat-row:hover .cat-row-btns {
+  opacity: 1;
+}
+
+.cat-row.editing .cat-row-btns {
+  opacity: 1;
+}
+
+.cat-edit-input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  background: var(--input-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.cat-edit-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
+}
+
 

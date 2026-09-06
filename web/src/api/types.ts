@@ -193,19 +193,27 @@ export type PaymentCalendar = {
 }
 
 export type ExpenseCategory = {
-  code: string
-  label: string
+  id: string
+  name: string
+  displayOrder: number
 }
 
 export type Expense = {
   id: string
-  category: string
+  categoryId: string
+  categoryName: string
   amount: number
   currency: string
   yearMonth: string
   note: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type ExpenseSummary = {
+  byCategoryByMonth: Record<string, Record<string, number>>
+  totalsByCategory: Record<string, number>
+  total: number
 }
 
 export type PortfolioKind = 'stock' | 'crypto'
