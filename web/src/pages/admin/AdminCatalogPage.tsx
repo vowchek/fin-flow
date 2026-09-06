@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ApiError } from '../../api/client'
 import * as instrumentsApi from '../../api/instruments'
 import type { InstrumentPayment, RemoteInstrument } from '../../api/instruments'
 import type { Instrument, PortfolioKind } from '../../api/types'
 import { AssetLogo } from '../../components/AssetLogo'
 import { Modal } from '../../components/Modal'
+import { Pagination } from '../../components/Pagination'
 import { formatMoney } from '../../lib/format'
+
+const PAGE_SIZE = 10
 
 type Draft = {
   symbol: string
@@ -61,25 +64,51 @@ export function AdminCatalogPage() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [payments, setPayments] = useState<InstrumentPayment[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [payPage, setPayPage] = useState(0)
+  const [payTotalPages, setPayTotalPages] = useState(0)
+  const [payTotalElements, setPayTotalElements] = useState(0)
   const [bulkMsg, setBulkMsg] = useState<string | null>(null)
+  const [catalogQ, setCatalogQ] = useState('')
+  const [catalogQDebounced, setCatalogQDebounced] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
 
   const title = kind === 'stock' ? 'Фонд (MOEX)' : 'Крипта (CoinGecko)'
 
-  async function reload() {
+  const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      setItems(await instrumentsApi.listAdminCatalog(kind))
+      const res = await instrumentsApi.listAdminCatalogPaged(kind, {
+        q: catalogQDebounced,
+        page,
+        size: PAGE_SIZE,
+      })
+      setItems(res.content)
+      setTotalPages(res.totalPages)
+      setTotalElements(res.totalElements)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Ошибка загрузки')
     } finally {
       setLoading(false)
     }
-  }
+  }, [kind, catalogQDebounced, page])
 
   useEffect(() => {
     void reload()
-  }, [kind])
+  }, [reload])
+
+  useEffect(() => {
+    setPage(0)
+  }, [kind, catalogQDebounced])
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setCatalogQDebounced(catalogQ.trim())
+    }, 300)
+    return () => window.clearTimeout(handle)
+  }, [catalogQ])
 
   useEffect(() => {
     if (kind !== 'stock' || !searchQ.trim() || searchQ.trim().length < 1) {
@@ -98,14 +127,35 @@ export function AdminCatalogPage() {
   }, [searchQ, kind])
 
   useEffect(() => {
+    setPayPage(0)
+  }, [editing?.id, tab])
+
+  useEffect(() => {
     if (!editing || kind !== 'stock' || tab !== 'payments') return
+    let cancelled = false
     setPaymentsLoading(true)
     instrumentsApi
-      .listInstrumentPayments(editing.id)
-      .then(setPayments)
-      .catch(() => setPayments([]))
-      .finally(() => setPaymentsLoading(false))
-  }, [editing, kind, tab])
+      .listInstrumentPaymentsPaged(editing.id, payPage, 10)
+      .then((res) => {
+        if (cancelled) return
+        setPayments(res.content)
+        setPayTotalPages(res.totalPages)
+        setPayTotalElements(res.totalElements)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPayments([])
+          setPayTotalPages(0)
+          setPayTotalElements(0)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPaymentsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [editing, kind, tab, payPage])
 
   function openCreate() {
     setEditing(null)
@@ -187,7 +237,7 @@ export function AdminCatalogPage() {
 
   async function onRefreshAllPayments() {
     if (kind !== 'stock') return
-    if (!window.confirm(`Обновить дивиденды/купоны для всех ${items.length} активов? Это может занять минуту.`)) {
+    if (!window.confirm(`Обновить дивиденды/купоны для всех ${totalElements} активов? Это может занять минуту.`)) {
       return
     }
     setPending(true)
@@ -275,7 +325,7 @@ export function AdminCatalogPage() {
         </div>
         <div className="row" style={{ gap: '0.5rem' }}>
           {kind === 'stock' ? (
-            <button type="button" className="btn btn-ghost" disabled={pending || items.length === 0} onClick={() => void onRefreshAllPayments()}>
+            <button type="button" className="btn btn-ghost" disabled={pending || totalElements === 0} onClick={() => void onRefreshAllPayments()}>
               {pending ? 'Обновляем…' : 'Обновить дивиденды'}
             </button>
           ) : null}
@@ -297,12 +347,36 @@ export function AdminCatalogPage() {
       {bulkMsg && !modalOpen ? <p className="muted">{bulkMsg}</p> : null}
       {error && !modalOpen && <p className="error">{error}</p>}
 
+      <div className="panel" style={{ marginBottom: '0.75rem' }}>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label htmlFor="adm-catalog-q">Поиск по активу для быстрого редактирования</label>
+          <input
+            id="adm-catalog-q"
+            value={catalogQ}
+            onChange={(e) => setCatalogQ(e.target.value)}
+            placeholder="Тикер, название или externalId — например SBER, Сбер, bitcoin"
+            autoComplete="off"
+          />
+        </div>
+        {!loading && totalElements > 0 ? (
+          <p className="muted" style={{ margin: '0.5rem 0 0' }}>
+            Найдено: {totalElements}
+            {catalogQDebounced ? ` по «${catalogQDebounced}»` : ` в «${title}»`}
+          </p>
+        ) : null}
+      </div>
+
       {loading ? (
         <div className="panel empty">Загрузка…</div>
       ) : items.length === 0 ? (
-        <div className="panel empty">В каталоге «{title}» пока пусто</div>
+        <div className="panel empty">
+          {catalogQDebounced
+            ? `По «${catalogQDebounced}» ничего не найдено`
+            : `В каталоге «${title}» пока пусто`}
+        </div>
       ) : (
-        <ul className="list">
+        <>
+          <ul className="list">
           {items.map((item) => (
             <li key={item.id} className="holding-row priced">
               <span className="holding-main">
@@ -334,7 +408,14 @@ export function AdminCatalogPage() {
               </span>
             </li>
           ))}
-        </ul>
+          </ul>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            onChange={setPage}
+          />
+        </>
       )}
 
       <Modal
@@ -524,26 +605,34 @@ export function AdminCatalogPage() {
               ) : payments.length === 0 ? (
                 <p className="muted">Выплат пока нет — нажмите «Обновить с T‑Invest».</p>
               ) : (
-                <div className="adm-pay-wrap">
-                  <table className="adm-pay-table">
-                    <thead>
-                      <tr>
-                        <th>Дата</th>
-                        <th>Тип</th>
-                        <th>На 1 шт</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payments.map((p) => (
-                        <tr key={p.id}>
-                          <td>{p.occurredOn}</td>
-                          <td>{paymentKindLabel(p.kind)}</td>
-                          <td>{formatMoney(p.amountPerUnit, p.currency)}</td>
+                <>
+                  <div className="adm-pay-wrap">
+                    <table className="adm-pay-table">
+                      <thead>
+                        <tr>
+                          <th>Дата</th>
+                          <th>Тип</th>
+                          <th>На 1 шт</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {payments.map((p) => (
+                          <tr key={p.id}>
+                            <td>{p.occurredOn}</td>
+                            <td>{paymentKindLabel(p.kind)}</td>
+                            <td>{formatMoney(p.amountPerUnit, p.currency)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination
+                    page={payPage}
+                    totalPages={payTotalPages}
+                    totalElements={payTotalElements}
+                    onChange={setPayPage}
+                  />
+                </>
               )}
             </div>
           ) : null}

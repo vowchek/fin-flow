@@ -6,6 +6,7 @@ import com.ledger.api.dto.InstrumentPaymentResponse;
 import com.ledger.api.dto.InstrumentPaymentsRefreshResponse;
 import com.ledger.api.dto.InstrumentResponse;
 import com.ledger.api.dto.InstrumentUpsertRequest;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.api.dto.RemoteInstrumentResponse;
 import com.ledger.application.CatalogService;
 import com.ledger.application.InstrumentImportService;
@@ -64,14 +65,30 @@ public class AdminCatalogController {
         return imports.refreshFromMarket(id, overwriteCashflow);
     }
 
-    @GetMapping("/stock-instruments/{id}/payments")
+    @GetMapping(value = "/stock-instruments/{id}/payments", params = "!page")
     public List<InstrumentPaymentResponse> listStockPayments(@PathVariable UUID id) {
         return imports.listPayments(id);
     }
 
-    @GetMapping("/stock-instruments")
-    public List<InstrumentResponse> listStock() {
-        return catalog.listForAdmin(AssetMarket.MOEX);
+    @GetMapping(value = "/stock-instruments/{id}/payments", params = "page")
+    public PageResponse<InstrumentPaymentResponse> listStockPaymentsPaged(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return imports.listPaymentsPaged(id, page, size);
+    }
+
+    @GetMapping(value = "/stock-instruments", params = "!page")
+    public List<InstrumentResponse> listStock(@RequestParam(required = false) String q) {
+        return catalog.listForAdmin(AssetMarket.MOEX, q);
+    }
+
+    @GetMapping(value = "/stock-instruments", params = "page")
+    public PageResponse<InstrumentResponse> listStockPaged(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return catalog.listForAdminPaged(AssetMarket.MOEX, q, page, size);
     }
 
     @PostMapping("/stock-instruments")
@@ -96,9 +113,17 @@ public class AdminCatalogController {
         return catalog.uploadLogo(AssetMarket.MOEX, id, file);
     }
 
-    @GetMapping("/crypto-instruments")
-    public List<InstrumentResponse> listCrypto() {
-        return catalog.listForAdmin(AssetMarket.CRYPTO);
+    @GetMapping(value = "/crypto-instruments", params = "!page")
+    public List<InstrumentResponse> listCrypto(@RequestParam(required = false) String q) {
+        return catalog.listForAdmin(AssetMarket.CRYPTO, q);
+    }
+
+    @GetMapping(value = "/crypto-instruments", params = "page")
+    public PageResponse<InstrumentResponse> listCryptoPaged(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return catalog.listForAdminPaged(AssetMarket.CRYPTO, q, page, size);
     }
 
     @PostMapping("/crypto-instruments")

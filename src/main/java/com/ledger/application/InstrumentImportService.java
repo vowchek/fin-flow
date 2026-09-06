@@ -5,6 +5,7 @@ import com.ledger.api.dto.InstrumentImportResponse;
 import com.ledger.api.dto.InstrumentPaymentResponse;
 import com.ledger.api.dto.InstrumentPaymentsRefreshResponse;
 import com.ledger.api.dto.InstrumentResponse;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.api.dto.RemoteInstrumentResponse;
 import com.ledger.domain.AssetKind;
 import com.ledger.domain.AssetMarket;
@@ -17,6 +18,8 @@ import com.ledger.infrastructure.persistence.StockInstrumentPaymentRepository;
 import com.ledger.infrastructure.persistence.StockInstrumentRepository;
 import com.ledger.infrastructure.storage.LogoStorageService;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -201,6 +204,17 @@ public class InstrumentImportService {
             throw new ResourceNotFoundException("StockInstrument", instrumentId);
         }
         return toPaymentResponses(payments.findByInstrumentIdOrderByOccurredOnDesc(instrumentId));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<InstrumentPaymentResponse> listPaymentsPaged(UUID instrumentId, int page, int size) {
+        if (!stocks.existsById(instrumentId)) {
+            throw new ResourceNotFoundException("StockInstrument", instrumentId);
+        }
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 100));
+        return PageResponse.of(payments.findByInstrumentIdOrderByOccurredOnDesc(instrumentId, pageable)
+                .map(p -> new InstrumentPaymentResponse(
+                        p.getId(), p.getOccurredOn(), p.getAmountPerUnit(), p.getCurrency(), p.getKind())));
     }
 
     private TinvestClient requireTinvest() {

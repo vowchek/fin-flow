@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Instrument, PortfolioKind } from './types'
+import type { Instrument, Page, PortfolioKind } from './types'
 
 function userPath(kind: PortfolioKind) {
   return kind === 'stock' ? '/api/v1/stock-instruments' : '/api/v1/crypto-instruments'
@@ -61,8 +61,31 @@ export function listCatalog(kind: PortfolioKind, q?: string) {
   return api<Instrument[]>(`${userPath(kind)}${params}`)
 }
 
-export function listAdminCatalog(kind: PortfolioKind) {
-  return api<Instrument[]>(adminPath(kind))
+export function listAdminCatalog(kind: PortfolioKind, q?: string) {
+  const params = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''
+  return api<Instrument[]>(`${adminPath(kind)}${params}`)
+}
+
+export type CatalogPageParams = {
+  q?: string
+  page?: number
+  size?: number
+}
+
+function pageParams(params: CatalogPageParams) {
+  const search = new URLSearchParams()
+  if (params.q?.trim()) search.set('q', params.q.trim())
+  search.set('page', String(params.page ?? 0))
+  search.set('size', String(params.size ?? 10))
+  return `?${search}`
+}
+
+export function listAdminCatalogPaged(kind: PortfolioKind, params: CatalogPageParams = {}) {
+  return api<Page<Instrument>>(`${adminPath(kind)}${pageParams(params)}`)
+}
+
+export function listCatalogPaged(kind: PortfolioKind, params: CatalogPageParams = {}) {
+  return api<Page<Instrument>>(`${userPath(kind)}${pageParams(params)}`)
 }
 
 export function createInstrument(kind: PortfolioKind, payload: InstrumentPayload) {
@@ -127,6 +150,11 @@ export function refreshAllPayments() {
 
 export function listInstrumentPayments(id: string) {
   return api<InstrumentPayment[]>(`${adminPath('stock')}/${id}/payments`)
+}
+
+export function listInstrumentPaymentsPaged(id: string, page = 0, size = 10) {
+  const params = new URLSearchParams({ page: String(page), size: String(size) })
+  return api<Page<InstrumentPayment>>(`${adminPath('stock')}/${id}/payments?${params}`)
 }
 
 export async function uploadLogo(kind: PortfolioKind, id: string, file: File) {

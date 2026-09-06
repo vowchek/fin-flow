@@ -5,6 +5,7 @@ import com.ledger.api.dto.ExpenseCategoryResponse;
 import com.ledger.api.dto.ExpenseRequest;
 import com.ledger.api.dto.ExpenseResponse;
 import com.ledger.api.dto.ExpenseSummaryResponse;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.domain.AppUser;
 import com.ledger.domain.ExpenseCategoryEntity;
 import com.ledger.domain.ExpenseEntry;
@@ -12,6 +13,8 @@ import com.ledger.infrastructure.persistence.ExpenseCategoryRepository;
 import com.ledger.infrastructure.persistence.ExpenseEntryRepository;
 import com.ledger.infrastructure.persistence.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,6 +99,22 @@ public class ExpenseService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ExpenseResponse> listPaged(String from, String to, int page, int size) {
+        YearMonth fromMonth = YearMonths.parse(from);
+        YearMonth toMonth = YearMonths.parse(to);
+        if (toMonth.isBefore(fromMonth)) {
+            throw new IllegalArgumentException("to must be on or after from");
+        }
+        LocalDate fromDate = YearMonths.toFirstDay(fromMonth);
+        LocalDate toDate = YearMonths.toFirstDay(toMonth);
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 100));
+        return PageResponse.of(expenses
+                .findByOwnerIdAndOccurredMonthGreaterThanEqualAndOccurredMonthLessThanEqualOrderByOccurredMonthDescCreatedAtDesc(
+                        currentUser.requireUserId(), fromDate, toDate, pageable)
+                .map(this::toResponse));
     }
 
     @Transactional(readOnly = true)

@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Expense, ExpenseCategory, ExpenseSummary } from './types'
+import type { Expense, ExpenseCategory, ExpenseSummary, Page } from './types'
 
 export function listCategories() {
   return api<ExpenseCategory[]>('/api/v1/expense-categories')
@@ -26,6 +26,11 @@ export function deleteCategory(id: string) {
 export function listExpenses(from: string, to: string) {
   const params = new URLSearchParams({ from, to })
   return api<Expense[]>(`/api/v1/expenses?${params}`)
+}
+
+export function listExpensesPaged(from: string, to: string, page = 0, size = 10) {
+  const params = new URLSearchParams({ from, to, page: String(page), size: String(size) })
+  return api<Page<Expense>>(`/api/v1/expenses?${params}`)
 }
 
 export function getSummary(from: string, to: string) {

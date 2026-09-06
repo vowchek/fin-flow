@@ -2,6 +2,7 @@ package com.ledger.application;
 
 import com.ledger.api.dto.InstrumentResponse;
 import com.ledger.api.dto.InstrumentUpsertRequest;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.domain.AssetMarket;
 import com.ledger.domain.CatalogItem;
 import com.ledger.domain.CryptoInstrument;
@@ -10,6 +11,10 @@ import com.ledger.infrastructure.persistence.CryptoInstrumentRepository;
 import com.ledger.infrastructure.persistence.StockInstrumentRepository;
 import com.ledger.infrastructure.storage.LogoStorageService;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,10 +54,53 @@ public class CatalogService {
 
     @Transactional(readOnly = true)
     public List<InstrumentResponse> listForAdmin(AssetMarket market) {
+        return listForAdmin(market, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<InstrumentResponse> listForAdmin(AssetMarket market, String query) {
+        String q = query == null ? "" : query.trim();
+        if (q.isEmpty()) {
+            return switch (market) {
+                case MOEX -> stocks.findAllByOrderBySymbolAsc().stream().map(this::toStockResponse).toList();
+                case CRYPTO -> cryptos.findAllByOrderBySymbolAsc().stream().map(this::toCryptoResponse).toList();
+            };
+        }
+        // Быстрый поиск для редактирования: symbol / name / externalId, без учёта регистра.
+        Pageable all = Pageable.unpaged();
+        return listForAdminPaged(market, q, 0, Integer.MAX_VALUE).content();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<InstrumentResponse> listForUsersPaged(AssetMarket market, String query, int page, int size) {
+        String q = query == null ? "" : query.trim();
+        Pageable pageable = pageable(page, size, Sort.by("symbol").ascending());
         return switch (market) {
-            case MOEX -> stocks.findAllByOrderBySymbolAsc().stream().map(this::toStockResponse).toList();
-            case CRYPTO -> cryptos.findAllByOrderBySymbolAsc().stream().map(this::toCryptoResponse).toList();
+            case MOEX -> {
+                Page<InstrumentResponse> p = stocks.searchEnabledPaged(q, pageable).map(this::toStockResponse);
+                yield PageResponse.of(p);
+            }
+            case CRYPTO -> {
+                Page<InstrumentResponse> p = cryptos.searchEnabledPaged(q, pageable).map(this::toCryptoResponse);
+                yield PageResponse.of(p);
+            }
         };
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<InstrumentResponse> listForAdminPaged(AssetMarket market, String query, int page, int size) {
+        String q = query == null ? "" : query.trim();
+        Pageable pageable = pageable(page, size, Sort.by("symbol").ascending());
+        return switch (market) {
+            case MOEX -> PageResponse.of(stocks.searchAllPaged(q, pageable).map(this::toStockResponse));
+            case CRYPTO -> PageResponse.of(cryptos.searchAllPaged(q, pageable).map(this::toCryptoResponse));
+        };
+    }
+
+    private static Pageable pageable(int page, int size, Sort sort) {
+        int p = Math.max(0, page);
+        int s = Math.min(Math.max(1, size), 100);
+        return PageRequest.of(p, s, sort);
     }
 
     @Transactional(readOnly = true)

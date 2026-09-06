@@ -1,6 +1,8 @@
 package com.ledger.infrastructure.persistence;
 
 import com.ledger.domain.ExpenseEntry;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +18,13 @@ public interface ExpenseEntryRepository extends JpaRepository<ExpenseEntry, UUID
             UUID ownerId,
             LocalDate fromInclusive,
             LocalDate toInclusive
+    );
+
+    Page<ExpenseEntry> findByOwnerIdAndOccurredMonthGreaterThanEqualAndOccurredMonthLessThanEqualOrderByOccurredMonthDescCreatedAtDesc(
+            UUID ownerId,
+            LocalDate fromInclusive,
+            LocalDate toInclusive,
+            Pageable pageable
     );
 
     Optional<ExpenseEntry> findByIdAndOwnerId(UUID id, UUID ownerId);

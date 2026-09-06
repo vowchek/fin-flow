@@ -1,6 +1,8 @@
 package com.ledger.infrastructure.persistence;
 
 import com.ledger.domain.StockInstrumentPayment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +14,8 @@ import java.util.UUID;
 public interface StockInstrumentPaymentRepository extends JpaRepository<StockInstrumentPayment, UUID> {
 
     List<StockInstrumentPayment> findByInstrumentIdOrderByOccurredOnDesc(UUID instrumentId);
+
+    Page<StockInstrumentPayment> findByInstrumentIdOrderByOccurredOnDesc(UUID instrumentId, Pageable pageable);
 
     @Query("""
             select p from StockInstrumentPayment p

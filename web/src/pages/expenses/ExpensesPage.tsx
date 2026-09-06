@@ -17,6 +17,9 @@ import * as expensesApi from '../../api/expenses'
 import type { Expense, ExpenseCategory, ExpenseSummary } from '../../api/types'
 import { formatMoney } from '../../lib/format'
 import { CategoryModal } from '../../components/CategoryModal'
+import { Pagination } from '../../components/Pagination'
+
+const OPS_PAGE_SIZE = 10
 
 const MONTHS_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
 const MONTHS_FULL = [
@@ -48,6 +51,9 @@ export function ExpensesPage() {
   const [tab, setTab] = useState<Tab>('operations')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [opsPage, setOpsPage] = useState(0)
+  const [opsTotalPages, setOpsTotalPages] = useState(0)
+  const [opsTotalElements, setOpsTotalElements] = useState(0)
 
   // quick-add
   const [qCategoryId, setQCategoryId] = useState('')
@@ -76,25 +82,31 @@ export function ExpensesPage() {
     setLoading(true)
     setError(null)
     try {
-      const [cats, list, sum] = await Promise.all([
+      const [cats, paged, sum] = await Promise.all([
         expensesApi.listCategories(),
-        expensesApi.listExpenses(currentYM, currentYM),
+        expensesApi.listExpensesPaged(currentYM, currentYM, opsPage, OPS_PAGE_SIZE),
         expensesApi.getSummary(yearFrom, yearTo),
       ])
       setCategories(cats)
       if (!qCategoryId && cats.length) setQCategoryId(cats[0].id)
-      setItems(list)
+      setItems(paged.content)
+      setOpsTotalPages(paged.totalPages)
+      setOpsTotalElements(paged.totalElements)
       setSummary(sum)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Ошибка загрузки')
     } finally {
       setLoading(false)
     }
-  }, [currentYM, yearFrom, yearTo, qCategoryId])
+  }, [currentYM, yearFrom, yearTo, qCategoryId, opsPage])
 
   useEffect(() => {
     void reload()
   }, [reload])
+
+  useEffect(() => {
+    setOpsPage(0)
+  }, [currentYM])
 
   const monthTotals = useMemo(() => {
     if (!summary) return new Map<string, number>()
@@ -375,7 +387,7 @@ export function ExpensesPage() {
                 <>
                   <div className="exp-ops-header">
                     <span className="exp-ops-count">
-                      {items.length} {plural(items.length, 'запись', 'записи', 'записей')}
+                      {opsTotalElements} {plural(opsTotalElements, 'запись', 'записи', 'записей')}
                     </span>
                     <span className="exp-ops-total">
                       {formatMoney(items.reduce((s, i) => s + i.amount, 0))}
@@ -453,6 +465,12 @@ export function ExpensesPage() {
                       ),
                     )}
                   </ul>
+                  <Pagination
+                    page={opsPage}
+                    totalPages={opsTotalPages}
+                    totalElements={opsTotalElements}
+                    onChange={setOpsPage}
+                  />
                 </>
               )}
             </div>

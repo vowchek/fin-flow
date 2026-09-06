@@ -7,6 +7,7 @@ import com.ledger.api.dto.HoldingCreateRequest;
 import com.ledger.api.dto.HoldingDetailResponse;
 import com.ledger.api.dto.HoldingResponse;
 import com.ledger.api.dto.LazyStockSeedRequest;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.api.dto.PassiveIncomeResponse;
 import com.ledger.api.dto.PaymentCalendarResponse;
 import com.ledger.api.dto.PortfolioDetailResponse;
@@ -180,10 +181,20 @@ public class StockPortfolioController {
         return portfolios.addCoupon(id, request);
     }
 
-    @GetMapping("/{id}/holdings/{holdingId}/transactions")
+    @GetMapping(value = "/{id}/holdings/{holdingId}/transactions", params = "!page")
     @Operation(summary = "История сделок по позиции")
     public List<TradeResponse> transactions(@PathVariable UUID id, @PathVariable UUID holdingId) {
         return portfolios.listTransactions(id, holdingId);
+    }
+
+    @GetMapping(value = "/{id}/holdings/{holdingId}/transactions", params = "page")
+    @Operation(summary = "История сделок по позиции с пагинацией")
+    public PageResponse<TradeResponse> transactionsPaged(
+            @PathVariable UUID id,
+            @PathVariable UUID holdingId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return portfolios.listTransactionsPaged(id, holdingId, page, size);
     }
 
     @GetMapping("/{id}/holdings/{holdingId}/detail")

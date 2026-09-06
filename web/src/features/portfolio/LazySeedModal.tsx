@@ -66,19 +66,21 @@ export function LazySeedModal({
     setError(null)
     setPending(false)
     setQuery('')
+    setCatalog([])
     setStockRows([])
     setCryptoRows([])
     setInvestedAmount('')
     setStartedOn(todayIso())
+    setCatalogLoading(false)
+    if (kind !== 'crypto') return
+    const assets = (existingHoldings ?? []).filter((h) => !h.cash && Number(h.quantity) > 0)
+    if (assets.length === 0) return
+    // Prefill для extend: подтягиваем инструменты постранично (до 100), чтобы сопоставить символы.
     setCatalogLoading(true)
     void instrumentsApi
-      .listCatalog(kind)
-      .then((items) => {
-        setCatalog(items)
-        if (kind !== 'crypto') return
-        const assets = (existingHoldings ?? []).filter((h) => !h.cash && Number(h.quantity) > 0)
-        if (assets.length === 0) return
-        const bySymbol = new Map(items.map((i) => [i.symbol.toUpperCase(), i]))
+      .listCatalogPaged(kind, { page: 0, size: 100 })
+      .then((res) => {
+        const bySymbol = new Map(res.content.map((i) => [i.symbol.toUpperCase(), i]))
         const rows: CryptoRow[] = []
         for (const h of assets) {
           const instrument = bySymbol.get(h.symbol.toUpperCase())
@@ -95,7 +97,7 @@ export function LazySeedModal({
           }
         }
       })
-      .catch(() => setCatalog([]))
+      .catch(() => undefined)
       .finally(() => setCatalogLoading(false))
   }, [open, kind, mode])
 
@@ -104,17 +106,25 @@ export function LazySeedModal({
     return new Set(rows.map((r) => r.instrument.symbol.toUpperCase()))
   }, [kind, stockRows, cryptoRows])
 
-  const filteredCatalog = (() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return []
-    return catalog.filter(
-      (item) =>
-        !usedSymbols.has(item.symbol.toUpperCase()) &&
-        (item.symbol.toLowerCase().includes(q) ||
-          item.name.toLowerCase().includes(q) ||
-          item.externalId.toLowerCase().includes(q)),
-    )
-  })()
+  useEffect(() => {
+    if (!open) return
+    const q = query.trim()
+    if (q.length < 1) {
+      setCatalog([])
+      return
+    }
+    setCatalogLoading(true)
+    const handle = window.setTimeout(() => {
+      instrumentsApi
+        .listCatalogPaged(kind, { q, page: 0, size: 8 })
+        .then((res) => setCatalog(res.content.filter((i) => !usedSymbols.has(i.symbol.toUpperCase()))))
+        .catch(() => setCatalog([]))
+        .finally(() => setCatalogLoading(false))
+    }, 280)
+    return () => window.clearTimeout(handle)
+  }, [query, kind, open, usedSymbols])
+
+  const filteredCatalog = catalog
 
   function addInstrument(item: Instrument) {
     setQuery('')

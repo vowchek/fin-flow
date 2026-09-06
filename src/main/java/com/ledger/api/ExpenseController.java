@@ -5,6 +5,7 @@ import com.ledger.api.dto.ExpenseCategoryResponse;
 import com.ledger.api.dto.ExpenseRequest;
 import com.ledger.api.dto.ExpenseResponse;
 import com.ledger.api.dto.ExpenseSummaryResponse;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.application.ExpenseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -65,10 +66,20 @@ public class ExpenseController {
 
     /* ── expenses ── */
 
-    @GetMapping("/expenses")
+    @GetMapping(value = "/expenses", params = "!page")
     @Operation(summary = "Траты за диапазон месяцев (yyyy-MM)")
     public List<ExpenseResponse> list(@RequestParam String from, @RequestParam String to) {
         return expenses.list(from, to);
+    }
+
+    @GetMapping(value = "/expenses", params = "page")
+    @Operation(summary = "Траты за диапазон месяцев с пагинацией")
+    public PageResponse<ExpenseResponse> listPaged(
+            @RequestParam String from,
+            @RequestParam String to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return expenses.listPaged(from, to, page, size);
     }
 
     @GetMapping("/expenses/summary")

@@ -16,6 +16,7 @@ import {
   PlusIcon,
 } from '../../components/IconButton'
 import { Modal } from '../../components/Modal'
+import { Pagination } from '../../components/Pagination'
 import { AssetDetailModal } from '../../components/AssetDetailModal'
 import { GrowthChartModal } from '../../components/GrowthChartModal'
 import { PaymentCalendarModal } from '../../components/PaymentCalendarModal'
@@ -173,7 +174,11 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
   const [addToInvested, setAddToInvested] = useState(true)
   const [trades, setTrades] = useState<Trade[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyPage, setHistoryPage] = useState(0)
+  const [historyTotalPages, setHistoryTotalPages] = useState(0)
+  const [historyTotalElements, setHistoryTotalElements] = useState(0)
   const [showClosed, setShowClosed] = useState(false)
+  const [positionsPage, setPositionsPage] = useState(0)
   const [growthOpen, setGrowthOpen] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
   const [cashNote, setCashNote] = useState('')
@@ -187,16 +192,24 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [assetDetailId, setAssetDetailId] = useState<string | null>(null)
 
-  const filteredCatalog = (() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return []
-    return catalog.filter(
-      (item) =>
-        item.symbol.toLowerCase().includes(q) ||
-        item.name.toLowerCase().includes(q) ||
-        item.externalId.toLowerCase().includes(q),
-    )
-  })()
+  useEffect(() => {
+    if (dialog?.type !== 'add') return
+    const q = query.trim()
+    if (q.length < 1) {
+      setCatalog([])
+      setCatalogLoading(false)
+      return
+    }
+    setCatalogLoading(true)
+    const handle = window.setTimeout(() => {
+      instrumentsApi
+        .listCatalogPaged(kind, { q, page: 0, size: 8 })
+        .then((res) => setCatalog(res.content))
+        .catch(() => setCatalog([]))
+        .finally(() => setCatalogLoading(false))
+    }, 280)
+    return () => window.clearTimeout(handle)
+  }, [query, dialog, kind])
 
   async function reload() {
     setLoading(true)
@@ -214,6 +227,10 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
   useEffect(() => {
     void reload()
   }, [kind, id])
+
+  useEffect(() => {
+    setPositionsPage(0)
+  }, [kind, id, showClosed])
 
   useEffect(() => {
     if (kind !== 'stock' || !id) {
@@ -335,13 +352,9 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     setQuery('')
     setSelected(null)
     resetTradeForm()
+    setCatalog([])
+    setCatalogLoading(false)
     setDialog({ type: 'add' })
-    setCatalogLoading(true)
-    void instrumentsApi
-      .listCatalog(kind)
-      .then(setCatalog)
-      .catch(() => setCatalog([]))
-      .finally(() => setCatalogLoading(false))
   }
 
   function onAddClick() {
@@ -352,19 +365,44 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     openAdd()
   }
 
-  async function openHistory(holding: Holding) {
+  const HISTORY_PAGE_SIZE = 5
+
+  function openHistory(holding: Holding) {
     setError(null)
     setTrades([])
+    setHistoryTotalPages(0)
+    setHistoryTotalElements(0)
+    setHistoryPage(0)
     setDialog({ type: 'history', holding })
-    setHistoryLoading(true)
-    try {
-      setTrades(await portfoliosApi.listTransactions(kind, id, holding.id))
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось загрузить историю')
-    } finally {
-      setHistoryLoading(false)
-    }
   }
+
+  useEffect(() => {
+    if (dialog?.type !== 'history') return
+    const holdingId = dialog.holding.id
+    let cancelled = false
+    setHistoryLoading(true)
+    portfoliosApi
+      .listTransactionsPaged(kind, id, holdingId, historyPage, HISTORY_PAGE_SIZE)
+      .then((res) => {
+        if (cancelled) return
+        setTrades(res.content)
+        setHistoryTotalPages(res.totalPages)
+        setHistoryTotalElements(res.totalElements)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTrades([])
+          setHistoryTotalPages(0)
+          setHistoryTotalElements(0)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [dialog, historyPage, kind, id])
 
   async function onAdd(e: FormEvent) {
     e.preventDefault()
@@ -511,6 +549,14 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
     ...(showClosed ? [...openHoldings, ...closedHoldings] : openHoldings),
     ...(cashHolding ? [cashHolding] : []),
   ]
+  const POSITIONS_PAGE_SIZE = 10
+  const posTotalElements = rows.length
+  const posTotalPages = Math.ceil(rows.length / POSITIONS_PAGE_SIZE)
+  const safePositionsPage = posTotalPages === 0 ? 0 : Math.min(positionsPage, posTotalPages - 1)
+  const pageRows = rows.slice(
+    safePositionsPage * POSITIONS_PAGE_SIZE,
+    safePositionsPage * POSITIONS_PAGE_SIZE + POSITIONS_PAGE_SIZE,
+  )
   // Stock: manual «вложено». Crypto: sum of open cost bases (lazy allocation / buys).
   const costInvested = openHoldings.reduce((sum, h) => sum + Number(h.costBasis ?? 0), 0)
   const invested =
@@ -704,7 +750,8 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
               : 'Активов пока нет'}
           </div>
         ) : (
-          <div className="asset-table-wrap">
+          <>
+            <div className="asset-table-wrap">
             <table className="asset-table">
               <thead>
                 <tr>
@@ -719,7 +766,7 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((h) => {
+                {pageRows.map((h) => {
                   const isCash = Boolean(h.cash)
                   const closed = !isCash && Number(h.quantity) <= 0
                   const cur = h.currency || currency
@@ -887,6 +934,13 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
               </tbody>
             </table>
           </div>
+            <Pagination
+              page={safePositionsPage}
+              totalPages={posTotalPages}
+              totalElements={posTotalElements}
+              onChange={setPositionsPage}
+            />
+          </>
         )}
       </section>
 
@@ -947,12 +1001,12 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
                 {catalogLoading ? (
-                  <p className="muted">Загрузка каталога…</p>
-                ) : !query.trim() ? null : filteredCatalog.length === 0 ? (
-                  <p className="muted">{catalog.length === 0 ? 'Каталог пуст' : 'Ничего не найдено'}</p>
+                  <p className="muted">Ищем…</p>
+                ) : !query.trim() ? null : catalog.length === 0 ? (
+                  <p className="muted">Ничего не найдено</p>
                 ) : (
                   <ul className="suggest-list">
-                    {filteredCatalog.map((item) => (
+                    {catalog.map((item) => (
                       <li key={item.id}>
                         <button
                           type="button"
@@ -1094,24 +1148,32 @@ export function PortfolioDetailPage({ kind, listPath, title }: Props) {
         ) : trades.length === 0 ? (
           <p className="muted">Сделок пока нет</p>
         ) : (
-          <ul className="trade-list">
-            {trades.map((t) => {
-              const cashHistory = dialog?.type === 'history' && Boolean(dialog.holding.cash)
-              return (
-              <li key={t.id} className="trade-row">
-                <span className={`trade-side ${txKindClass(t)}`}>{txKindLabel(t)}</span>
-                <span className="trade-qty">
-                  {cashHistory ? formatMoney(t.quantity, currency) : t.quantity}
-                </span>
-                <span className="trade-date">
-                  {t.occurredOn}
-                  {t.unitPrice != null && !cashHistory ? ` · ${formatMoney(t.unitPrice, currency)}` : ''}
-                  {t.note ? ` · ${t.note}` : ''}
-                </span>
-              </li>
-              )
-            })}
-          </ul>
+          <>
+            <ul className="trade-list">
+              {trades.map((t) => {
+                const cashHistory = dialog?.type === 'history' && Boolean(dialog.holding.cash)
+                return (
+                <li key={t.id} className="trade-row">
+                  <span className={`trade-side ${txKindClass(t)}`}>{txKindLabel(t)}</span>
+                  <span className="trade-qty">
+                    {cashHistory ? formatMoney(t.quantity, currency) : t.quantity}
+                  </span>
+                  <span className="trade-date">
+                    {t.occurredOn}
+                    {t.unitPrice != null && !cashHistory ? ` · ${formatMoney(t.unitPrice, currency)}` : ''}
+                    {t.note ? ` · ${t.note}` : ''}
+                  </span>
+                </li>
+                )
+              })}
+            </ul>
+            <Pagination
+              page={historyPage}
+              totalPages={historyTotalPages}
+              totalElements={historyTotalElements}
+              onChange={setHistoryPage}
+            />
+          </>
         )}
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setDialog(null)}>Закрыть</button>

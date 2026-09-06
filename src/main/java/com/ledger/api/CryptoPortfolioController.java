@@ -5,6 +5,7 @@ import com.ledger.api.dto.HoldingCreateRequest;
 import com.ledger.api.dto.HoldingDetailResponse;
 import com.ledger.api.dto.HoldingResponse;
 import com.ledger.api.dto.LazyCryptoSeedRequest;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.api.dto.PortfolioDetailResponse;
 import com.ledger.api.dto.PortfolioRequest;
 import com.ledger.api.dto.PortfolioSummaryResponse;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -131,10 +133,20 @@ public class CryptoPortfolioController {
         return portfolios.withdrawCash(id, request);
     }
 
-    @GetMapping("/{id}/holdings/{holdingId}/transactions")
+    @GetMapping(value = "/{id}/holdings/{holdingId}/transactions", params = "!page")
     @Operation(summary = "История сделок по позиции")
     public List<TradeResponse> transactions(@PathVariable UUID id, @PathVariable UUID holdingId) {
         return portfolios.listTransactions(id, holdingId);
+    }
+
+    @GetMapping(value = "/{id}/holdings/{holdingId}/transactions", params = "page")
+    @Operation(summary = "История сделок по позиции с пагинацией")
+    public PageResponse<TradeResponse> transactionsPaged(
+            @PathVariable UUID id,
+            @PathVariable UUID holdingId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return portfolios.listTransactionsPaged(id, holdingId, page, size);
     }
 
     @GetMapping("/{id}/holdings/{holdingId}/detail")

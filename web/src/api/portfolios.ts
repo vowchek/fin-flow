@@ -3,6 +3,7 @@ import type {
   Holding,
   HoldingCashflow,
   HoldingDetail,
+  Page,
   PassiveIncome,
   PaymentCalendar,
   PortfolioDetail,
@@ -180,6 +181,17 @@ export function sellHolding(kind: PortfolioKind, portfolioId: string, holdingId:
 
 export function listTransactions(kind: PortfolioKind, portfolioId: string, holdingId: string) {
   return api<Trade[]>(`${base(kind)}/${portfolioId}/holdings/${holdingId}/transactions`)
+}
+
+export function listTransactionsPaged(
+  kind: PortfolioKind,
+  portfolioId: string,
+  holdingId: string,
+  page = 0,
+  size = 10,
+) {
+  const params = new URLSearchParams({ page: String(page), size: String(size) })
+  return api<Page<Trade>>(`${base(kind)}/${portfolioId}/holdings/${holdingId}/transactions?${params}`)
 }
 
 export type CashMovementPayload = {

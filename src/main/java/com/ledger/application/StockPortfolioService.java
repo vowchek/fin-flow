@@ -14,6 +14,7 @@ import com.ledger.api.dto.PortfolioRequest;
 import com.ledger.api.dto.PortfolioSettingsRequest;
 import com.ledger.api.dto.PortfolioSettingsResponse;
 import com.ledger.api.dto.PortfolioSummaryResponse;
+import com.ledger.api.dto.PageResponse;
 import com.ledger.api.dto.TradeRequest;
 import com.ledger.api.dto.TradeResponse;
 import com.ledger.api.dto.ValuePointResponse;
@@ -36,6 +37,8 @@ import com.ledger.infrastructure.persistence.StockPortfolioRepository;
 import com.ledger.infrastructure.persistence.StockTransactionRepository;
 import com.ledger.infrastructure.persistence.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -281,6 +284,15 @@ public class StockPortfolioService {
         return transactions.findByHoldingIdOrderByOccurredOnDescCreatedAtDesc(holdingId).stream()
                 .map(this::toTrade)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<TradeResponse> listTransactionsPaged(UUID portfolioId, UUID holdingId, int page, int size) {
+        requireOwnedHolding(portfolioId, holdingId);
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 100));
+        return PageResponse.of(transactions
+                .findByHoldingIdOrderByOccurredOnDescCreatedAtDesc(holdingId, pageable)
+                .map(this::toTrade));
     }
 
     @Transactional(readOnly = true)

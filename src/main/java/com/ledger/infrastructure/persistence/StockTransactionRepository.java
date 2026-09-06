@@ -3,6 +3,8 @@ package com.ledger.infrastructure.persistence;
 import com.ledger.domain.StockTransaction;
 import com.ledger.domain.TradeSide;
 import com.ledger.domain.TxKind;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
@@ -13,6 +15,8 @@ import java.util.UUID;
 public interface StockTransactionRepository extends JpaRepository<StockTransaction, UUID> {
 
     List<StockTransaction> findByHoldingIdOrderByOccurredOnDescCreatedAtDesc(UUID holdingId);
+
+    Page<StockTransaction> findByHoldingIdOrderByOccurredOnDescCreatedAtDesc(UUID holdingId, Pageable pageable);
 
     Optional<StockTransaction> findFirstByHoldingIdAndSideOrderByOccurredOnAscCreatedAtAsc(UUID holdingId, TradeSide side);
 

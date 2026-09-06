@@ -617,8 +617,8 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  max-height: 22rem;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .trade-row {
